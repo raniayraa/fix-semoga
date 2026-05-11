@@ -10,6 +10,15 @@
     pci_devices:
       - "0000:01:00.0"
       - "0000:01:00.1"
+    port0_iface: TwentyFiveGigabitEthernet1/0/0
+    port1_iface: TwentyFiveGigabitEthernet1/0/1
+    port0_ip: 192.168.56.6/24
+    port1_ip: 192.168.46.6/24
+    static_arps:
+      - { iface: TwentyFiveGigabitEthernet1/0/0, ip: 192.168.56.5, mac: "64:9d:99:ff:e6:cf" }
+      - { iface: TwentyFiveGigabitEthernet1/0/0, ip: 192.168.56.1, mac: "64:9D:99:FF:F5:7B" }
+      - { iface: TwentyFiveGigabitEthernet1/0/1, ip: 192.168.46.4, mac: "64:9d:99:ff:e7:af" }
+      - { iface: TwentyFiveGigabitEthernet1/0/1, ip: 192.168.46.1, mac: "64:9D:99:FF:F5:7A" }
 
   tasks:
     - name: Stop XDP forwarder if running before VPP takes over
@@ -29,7 +38,6 @@
       ansible.builtin.shell: "bash {{ bind_script }} {{ item }}"
       loop: "{{ pci_devices }}"
 
-
     - name: Start VPP service
       ansible.builtin.shell: systemctl start vpp
 
@@ -42,39 +50,24 @@
 
     - name: Set IP address on port 0 (faces Node 5 / 192.168.56.x)
       ansible.builtin.shell: >
-        vppctl set int ip address TwentyFiveGigabitEthernet1/0/0 192.168.56.6/24
+        vppctl set int ip address {{ port0_iface }} {{ port0_ip }}
       failed_when: false
 
     - name: Set IP address on port 1 (faces Node 4 / 192.168.46.x)
       ansible.builtin.shell: >
-        vppctl set int ip address TwentyFiveGigabitEthernet1/0/1 192.168.46.6/24
+        vppctl set int ip address {{ port1_iface }} {{ port1_ip }}
       failed_when: false
 
     - name: Bring up port 0
-      ansible.builtin.shell: vppctl set int state TwentyFiveGigabitEthernet1/0/0 up
+      ansible.builtin.shell: vppctl set int state {{ port0_iface }} up
 
     - name: Bring up port 1
-      ansible.builtin.shell: vppctl set int state TwentyFiveGigabitEthernet1/0/1 up
+      ansible.builtin.shell: vppctl set int state {{ port1_iface }} up
 
-    - name: Set static ARP — Node 5 on port 0
+    - name: Set static ARP entries
       ansible.builtin.shell: >
-        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/0
-        192.168.56.5 64:9d:99:ff:e6:cf static
-
-    - name: Set static ARP — Node 1 right-side on port 0
-      ansible.builtin.shell: >
-        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/0
-        192.168.56.1 64:9D:99:FF:F5:7B static
-
-    - name: Set static ARP — Node 4 on port 1
-      ansible.builtin.shell: >
-        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/1
-        192.168.46.4 64:9d:99:ff:e7:af static
-
-    - name: Set static ARP — Node 1 left-side on port 1
-      ansible.builtin.shell: >
-        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/1
-        192.168.46.1 64:9D:99:FF:F5:7A static
+        vppctl set ip neighbor {{ item.iface }} {{ item.ip }} {{ item.mac }} static
+      loop: "{{ static_arps }}"
 
     - name: Show VPP interface state
       ansible.builtin.shell: vppctl show int

@@ -1,24 +1,22 @@
 ---
 # Configures the xdp-go-optimized daemon on Node 6 via its REST API.
-# The API runs on localhost:8080 of the control node (same machine).
+# The API runs on localhost:9898 of the control node (same machine).
 - name: Configure XDP forwarder on Node 6 via API
   hosts: localhost
   connection: local
   gather_facts: false
 
   vars:
-    api_base: "http://localhost:8080/api"
+    api_base: "http://localhost:9898/api"
     iface_ingress: "enp1s0f1np1"
     iface_egress: "enp1s0f0np0"
+    blocked_udp_ports: []
+    blocked_tcp_ports: []
     fwd_entries:
-      - ip: "192.168.56.5"
-        dst_mac: "64:9D:99:FF:E6:CF"   # Node 5 enp1s0f1np1
-        src_mac: "64:9D:99:FF:F5:9A"   # Node 6 enp1s0f0np0
-        action: "redirect"
-      - ip: "192.168.56.1"
-        dst_mac: "64:9D:99:FF:F5:7B"   # Node 1 enp1s0f1np1
-        src_mac: "64:9D:99:FF:F5:9A"   # Node 6 enp1s0f0np0
-        action: "redirect"
+      - { ip: "192.168.56.5", dst_mac: "64:9d:99:ff:e6:cf", src_mac: "64:9d:99:ff:f5:9a", action: "redirect" }
+      - { ip: "192.168.56.1", dst_mac: "64:9d:99:ff:f5:7b", src_mac: "64:9d:99:ff:f5:9a", action: "redirect" }
+      - { ip: "192.168.46.4", dst_mac: "64:9d:99:ff:e7:af", src_mac: "64:9d:99:ff:f5:9a", action: "redirect" }
+      - { ip: "192.168.46.1", dst_mac: "64:9d:99:ff:f5:7a", src_mac: "64:9d:99:ff:f5:9a", action: "redirect" }
 
   tasks:
     - name: Stop XDP if already running
@@ -66,6 +64,26 @@
           action: "{{ item.action }}"
         status_code: 201
       loop: "{{ fwd_entries }}"
+
+    - name: Apply blocked UDP ports
+      ansible.builtin.uri:
+        url: "{{ api_base }}/config"
+        method: PUT
+        body_format: json
+        body:
+          udp_ports: "{{ blocked_udp_ports }}"
+        status_code: 200
+      when: blocked_udp_ports | length > 0
+
+    - name: Apply blocked TCP ports
+      ansible.builtin.uri:
+        url: "{{ api_base }}/config"
+        method: PUT
+        body_format: json
+        body:
+          tcp_ports: "{{ blocked_tcp_ports }}"
+        status_code: 200
+      when: blocked_tcp_ports | length > 0
 
     - name: Verify forwarding table
       ansible.builtin.uri:

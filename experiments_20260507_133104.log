@@ -1,0 +1,31 @@
+
+Experiment sweep: 1 port(s) × 1 forwarder(s) × 1 direction(s) = 1 runs
+  Ports:      [300]
+  Forwarders: ['xdp']
+  Directions: ['41']
+  Duration:   15s per run
+  Setup wait: 10s
+
+════════════════════════════════════════════════════════════
+[1/1] XDP | 300 Port(s) | Direction: 41
+════════════════════════════════════════════════════════════
+
+  [1/5] Modifying pkt files ... OK
+  [2/5] Updating pktgen_config.json ... OK
+  [3/5] Running setup playbooks ...
+    Running 01_basic_setup.yaml ... 
+PLAY [Basic network interface setup] *******************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [10.90.1.1]
+ok: [10.90.1.4]
+ok: [10.90.1.5]
+ok: [10.90.1.6]
+
+TASK [Kill any existing pktgen process] ****************************************
+skipping: [10.90.1.6]
+changed: [10.90.1.5]
+changed: [10.90.1.1]
+changed: [10.90.1.4]
+
+TASK [Bind NICs to kernel driver] **********************************************

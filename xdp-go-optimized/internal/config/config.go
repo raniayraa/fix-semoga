@@ -75,3 +75,12 @@ func Load(path string) (*XDPConfig, error) {
 	}
 	return &cfg, nil
 }
+
+// Save writes cfg to path as indented JSON, replacing the file atomically.
+func Save(path string, cfg *XDPConfig) error {
+	data, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o644)
+}

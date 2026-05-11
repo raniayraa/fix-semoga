@@ -4,7 +4,6 @@
   become: true
 
   vars:
-    xdp_bin: "/home/telmat/belajar-rania/combine-firewall-forwarder/xdp_fw_fwd"
     iface_ingress: "enp1s0f1np1"
     iface_egress:  "enp1s0f0np0"
 

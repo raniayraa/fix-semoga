@@ -19,13 +19,16 @@ import (
 type Server struct {
 	mgr        *xdp.Manager
 	store      *db.Store
+	cfgPath    string // path to turbo.json; empty means no persistence
 	mu         sync.Mutex
 	rbufCancel context.CancelFunc // cancels the ring buffer consumer goroutine
 }
 
-// NewServer creates a Server with the given XDP manager and SQLite store.
-func NewServer(mgr *xdp.Manager, store *db.Store) *Server {
-	return &Server{mgr: mgr, store: store}
+// NewServer creates a Server with the given XDP manager, SQLite store, and
+// optional config file path. When cfgPath is non-empty, PUT /api/config
+// persists changes back to that file so they survive daemon restarts.
+func NewServer(mgr *xdp.Manager, store *db.Store, cfgPath string) *Server {
+	return &Server{mgr: mgr, store: store, cfgPath: cfgPath}
 }
 
 // Router builds and returns the chi router with all API routes and static file serving.

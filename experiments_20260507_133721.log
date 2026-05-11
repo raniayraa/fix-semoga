@@ -1,0 +1,51 @@
+
+Experiment sweep: 1 port(s) × 1 forwarder(s) × 1 direction(s) = 1 runs
+  Ports:      [300]
+  Forwarders: ['vpp']
+  Directions: ['41']
+  Duration:   15s per run
+  Setup wait: 10s
+
+════════════════════════════════════════════════════════════
+[1/1] VPP | 300 Port(s) | Direction: 41
+════════════════════════════════════════════════════════════
+
+  [1/5] Modifying pkt files ... OK
+  [2/5] Updating pktgen_config.json ... OK
+  [3/5] Running setup playbooks ...
+    Running 01_basic_setup.yaml ... 
+PLAY [Basic network interface setup] *******************************************
+
+TASK [Gathering Facts] *********************************************************
+fatal: [10.90.1.1]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: \"System is booting up. Unprivileged users are not permitted to log in yet. Please come back later. For technical details, see pam_nologin(8).\"\nConnection closed by 10.90.1.1 port 22", "unreachable": true}
+fatal: [10.90.1.4]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: \"System is booting up. Unprivileged users are not permitted to log in yet. Please come back later. For technical details, see pam_nologin(8).\"\nConnection closed by 10.90.1.4 port 22", "unreachable": true}
+fatal: [10.90.1.5]: UNREACHABLE! => {"changed": false, "msg": "Failed to connect to the host via ssh: \"System is booting up. Unprivileged users are not permitted to log in yet. Please come back later. For technical details, see pam_nologin(8).\"\nConnection closed by 10.90.1.5 port 22", "unreachable": true}
+ok: [10.90.1.6]
+
+TASK [Kill any existing pktgen process] ****************************************
+skipping: [10.90.1.6]
+
+TASK [Bind NICs to kernel driver] **********************************************
+skipping: [10.90.1.6]
+
+TASK [Bring up interface, flush addresses, disable RA] *************************
+failed: [10.90.1.6] (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.56.6/24', 'ipv6': 'fd00:56::6/64'}}) => {"ansible_loop_var": "item", "changed": true, "cmd": "set -e\nip link set enp1s0f0np0 up\nip addr flush dev enp1s0f0np0\nip -6 addr flush dev enp1s0f0np0\nsysctl -w net.ipv6.conf.enp1s0f0np0.accept_ra=0\n", "delta": "0:00:00.004653", "end": "2026-05-07 13:37:22.943711", "item": {"key": "enp1s0f0np0", "value": {"ipv4": "192.168.56.6/24", "ipv6": "fd00:56::6/64"}}, "msg": "non-zero return code", "rc": 1, "start": "2026-05-07 13:37:22.939058", "stderr": "Cannot find device \"enp1s0f0np0\"", "stderr_lines": ["Cannot find device \"enp1s0f0np0\""], "stdout": "", "stdout_lines": []}
+failed: [10.90.1.6] (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.6/24', 'ipv6': 'fd00:46::6/64'}}) => {"ansible_loop_var": "item", "changed": true, "cmd": "set -e\nip link set enp1s0f1np1 up\nip addr flush dev enp1s0f1np1\nip -6 addr flush dev enp1s0f1np1\nsysctl -w net.ipv6.conf.enp1s0f1np1.accept_ra=0\n", "delta": "0:00:00.004903", "end": "2026-05-07 13:37:23.082422", "item": {"key": "enp1s0f1np1", "value": {"ipv4": "192.168.46.6/24", "ipv6": "fd00:46::6/64"}}, "msg": "non-zero return code", "rc": 1, "start": "2026-05-07 13:37:23.077519", "stderr": "Cannot find device \"enp1s0f1np1\"", "stderr_lines": ["Cannot find device \"enp1s0f1np1\""], "stdout": "", "stdout_lines": []}
+
+PLAY RECAP *********************************************************************
+10.90.1.1                  : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.4                  : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.5                  : ok=0    changed=0    unreachable=1    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.6                  : ok=1    changed=0    unreachable=0    failed=1    skipped=2    rescued=0    ignored=0   
+
+FAILED (exit 4)
+  ERROR: 01_basic_setup.yaml failed — skipping this experiment.
+
+════════════════════════════════════════════════════════════
+Sweep complete: 0/1 ansible runs succeeded.
+
+Failed (ansible error):
+  VPP_300_Port_No_Block_41
+
+Degraded results (node5.csv empty — forwarder may not have reached Node 5):
+  VPP_300_Port_No_Block_41

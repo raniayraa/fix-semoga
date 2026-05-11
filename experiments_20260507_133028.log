@@ -1,0 +1,7 @@
+usage: experiment_runner.py [-h] --ports PORTS --traffic TRAFFIC
+                            [--duration DURATION] [--setup-wait SETUP_WAIT]
+                            [--inventory INVENTORY]
+                            [--ansible-dir ANSIBLE_DIR]
+                            [--forwarder FORWARDER [FORWARDER ...]]
+                            [--dry-run]
+experiment_runner.py: error: argument --forwarder: invalid choice: 'XDP' (choose from 'vpp', 'xdp', 'kernel')

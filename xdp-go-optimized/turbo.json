@@ -1,5 +1,32 @@
 {
   "firewall_flags": {
-    "events_enabled": false
+    "block_icmp_ping": false,
+    "block_ip_fragments": false,
+    "block_malformed_tcp": false,
+    "block_all_tcp": false,
+    "block_all_udp": false,
+    "block_broadcast": false,
+    "block_multicast": false,
+    "events_enabled": false,
+    "security_events_enabled": true
+  },
+  "blocked_ports": {
+    "tcp": [
+      1029,
+      1030,
+      1031,
+      1032,
+      1033
+    ],
+    "udp": [
+      53,
+      69,
+      123,
+      137,
+      138,
+      161,
+      162,
+      11211
+    ]
   }
 }

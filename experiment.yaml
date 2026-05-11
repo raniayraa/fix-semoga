@@ -1,0 +1,150 @@
+# experiment.yaml
+# Per-run experiment configuration — the only file you need to edit before each sweep.
+#
+# Usage:
+#   python experiment_runner_v2.py                           # uses this file by default
+#   python experiment_runner_v2.py --config experiment.yaml
+#   python experiment_runner_v2.py --config experiment.yaml --dry-run
+#   python experiment_runner_v2.py --config experiment.yaml --inventory hosts-lab.ini
+
+# Path to the infrastructure config (relative to this file, or absolute).
+# Contains paths, ansible wiring, and testbed settings.
+infra: infra.yaml
+
+
+experiment:
+  # Set to true to print every action without executing anything.
+  # The script will show exactly what commands would run and what files would change.
+  dry_run: false
+
+  # Seconds of pktgen traffic to collect per experiment.
+  # Longer = more stable statistics, but slower overall sweep.
+  duration: 15
+
+  # Seconds to wait after launching pktgen before sending the start signal.
+  # Gives pktgen time to initialize and reach steady-state before measurement begins.
+  setup_wait: 10
+
+  # Port ranges to sweep over. Each list entry is one sweep point.
+  # The script patches node*.pkt with these values before each run.
+  #
+  # Format:
+  #   Single port:       1024         (tests exactly one destination port)
+  #   Contiguous range:  "1024-1029"  (6 distinct ports, 1024 through 1029 inclusive)
+  #
+  # Each entry creates a separate set of experiment runs (one per forwarder × direction).
+  # Add more entries to sweep across multiple port-count granularities in one session.
+  ports:
+    # - 1024
+    # - "1024-1029"
+    - "1024-1103"
+
+  # Forwarders to benchmark. Valid values: vpp, xdp, kernel
+  # Runs in the listed order for every port × direction combination.
+  # Remove entries to skip forwarders you don't need for this run.
+  forwarders:
+    # - vpp
+    - xdp
+    # - kernel
+
+  # Traffic directions to test. Valid values:
+  #   41    — Node 4 sends to Node 1  (unidirectional)
+  #   15    — Node 1 sends to Node 5  (unidirectional; node5.csv checked for data)
+  #   15_41 — both directions at once  (bidirectional; node5.csv checked for data)
+  directions:
+    - "41"
+    # - "15_41"
+
+
+# Per-forwarder variable configuration.
+# Each key matches a forwarder name in experiment.forwarders.
+# The runner passes these as --extra-vars to the corresponding ansible playbook,
+# overriding any defaults defined inside the playbook.
+forwarders_config:
+  vpp:
+    vpp_poll_retries: 30
+    vpp_poll_delay: 1
+    bind_script: /home/telmat/scripts/bind-to-DPDK.sh
+    pci_devices:
+      - "0000:01:00.0"
+      - "0000:01:00.1"
+    port0_iface: TwentyFiveGigabitEthernet1/0/0
+    port1_iface: TwentyFiveGigabitEthernet1/0/1
+    port0_ip: 192.168.56.6/24
+    port1_ip: 192.168.46.6/24
+    static_arps:
+      - { iface: TwentyFiveGigabitEthernet1/0/0, ip: 192.168.56.5, mac: "64:9d:99:ff:e6:cf" }
+      - { iface: TwentyFiveGigabitEthernet1/0/0, ip: 192.168.56.1, mac: "64:9D:99:FF:F5:7B" }
+      - { iface: TwentyFiveGigabitEthernet1/0/1, ip: 192.168.46.4, mac: "64:9d:99:ff:e7:af" }
+      - { iface: TwentyFiveGigabitEthernet1/0/1, ip: 192.168.46.1, mac: "64:9D:99:FF:F5:7A" }
+
+  xdp:
+    api_base: "http://localhost:9898/api"
+    iface_ingress: enp1s0f1np1
+    iface_egress: enp1s0f0np0
+    fwd_entries:
+      - { ip: 192.168.14.22, dst_mac: "64:9d:99:1a:2b:3c", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.87.101, dst_mac: "64:9d:99:4d:5e:6f", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.203.77, dst_mac: "64:9d:99:7a:8b:9c", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.45.188, dst_mac: "64:9d:99:aa:bb:cc", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.99.11, dst_mac: "64:9d:99:de:ad:01", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.150.63, dst_mac: "64:9d:99:10:20:30", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.12.245, dst_mac: "64:9d:99:11:22:33", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.66.90, dst_mac: "64:9d:99:44:55:66", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.170.5, dst_mac: "64:9d:99:77:88:99", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.31.219, dst_mac: "64:9d:99:ab:cd:ef", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.54.72, dst_mac: "64:9d:99:12:34:56", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.201.17, dst_mac: "64:9d:99:65:43:21", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.77.154, dst_mac: "64:9d:99:fe:dc:ba", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.18.93, dst_mac: "64:9d:99:01:23:45", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.143.61, dst_mac: "64:9d:99:67:89:ab", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.220.44, dst_mac: "64:9d:99:bc:de:f0", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.81.200, dst_mac: "64:9d:99:13:57:9b", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.35.146, dst_mac: "64:9d:99:24:68:ac", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.112.38, dst_mac: "64:9d:99:35:79:bd", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.248.182, dst_mac: "64:9d:99:46:8a:ce", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.64.7, dst_mac: "64:9d:99:57:9b:df", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.121.55, dst_mac: "64:9d:99:68:ac:e0", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.173.94, dst_mac: "64:9d:99:79:bd:f1", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.28.163, dst_mac: "64:9d:99:8a:ce:02", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.95.130, dst_mac: "64:9d:99:9b:df:13", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.132.49, dst_mac: "64:9d:99:ac:e0:24", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.57.88, dst_mac: "64:9d:99:bd:f1:35", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.211.176, dst_mac: "64:9d:99:ce:02:46", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.38.67, dst_mac: "64:9d:99:df:13:57", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.184.115, dst_mac: "64:9d:99:e0:24:68", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.15.240, dst_mac: "64:9d:99:f1:35:79", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.146.33, dst_mac: "64:9d:99:02:46:8a", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.69.171, dst_mac: "64:9d:99:13:57:9b", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.226.26, dst_mac: "64:9d:99:24:68:ac", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.107.58, dst_mac: "64:9d:99:35:79:bd", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.51.199, dst_mac: "64:9d:99:46:8a:ce", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.197.84, dst_mac: "64:9d:99:57:9b:df", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.84.143, dst_mac: "64:9d:99:68:ac:e0", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.242.19, dst_mac: "64:9d:99:79:bd:f1", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.129.225, dst_mac: "64:9d:99:8a:ce:02", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.72.37, dst_mac: "64:9d:99:9b:df:13", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.168.91, dst_mac: "64:9d:99:ac:e0:24", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.24.208, dst_mac: "64:9d:99:bd:f1:35", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.156.52, dst_mac: "64:9d:99:ce:02:46", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.91.174, dst_mac: "64:9d:99:df:13:57", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.209.14, dst_mac: "64:9d:99:e0:24:68", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.117.186, dst_mac: "64:9d:99:f1:35:79", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.43.99, dst_mac: "64:9d:99:02:46:8a", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.188.120, dst_mac: "64:9d:99:13:57:9b", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.60.233, dst_mac: "64:9d:99:24:68:ac", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.134.41, dst_mac: "64:9d:99:35:79:bd", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.56.5, dst_mac: "64:9d:99:ff:e6:cf", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.56.1, dst_mac: "64:9d:99:ff:f5:7b", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.46.4, dst_mac: "64:9d:99:ff:e7:af", src_mac: "64:9d:99:ff:f5:9a" }
+      - { ip: 192.168.46.1, dst_mac: "64:9d:99:ff:f5:7a", src_mac: "64:9d:99:ff:f5:9a" }
+
+  kernel:
+    iface_ingress: enp1s0f1np1
+    iface_egress: enp1s0f0np0
+    static_neighbors:
+      - { ip: 192.168.46.1, mac: "64:9D:99:FF:F5:7A", dev: enp1s0f1np1 }
+      - { ip: 192.168.46.4, mac: "64:9D:99:FF:E7:AF", dev: enp1s0f1np1 }
+      - { ip: 192.168.56.1, mac: "64:9D:99:FF:F5:7B", dev: enp1s0f0np0 }
+      - { ip: 192.168.56.5, mac: "64:9D:99:FF:E6:CF", dev: enp1s0f0np0 }
+

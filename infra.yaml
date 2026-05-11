@@ -1,0 +1,93 @@
+# infra.yaml
+# Infrastructure configuration — stable hardware and path settings.
+# Edit only when your testbed changes (new NICs, new paths, new real routes).
+# This file is referenced by experiment.yaml via the 'infra:' key.
+
+paths:
+  # Local directory containing node*.pkt traffic-generator scripts
+  pkt_files_dir: /home/telmat/final_t40/dashboard/pkt_files
+
+  # JSON config file consumed by the pktgen dashboard
+  pktgen_config: /home/telmat/final_t40/dashboard/pktgen_config.json
+
+  # Where ansible saves per-experiment result directories
+  results_dir: /home/telmat/final_t40/results
+
+  # Signal files used to coordinate experiment start/stop timing with ansible
+  signal_start: /tmp/ansible_pktgen_start
+  signal_stop:  /tmp/ansible_pktgen_stop
+
+  # .pkt script files to patch with the current port range before each run
+  pkt_nodes:
+    - node1_send.pkt
+    - node4_send.pkt
+
+
+ansible:
+  # Directory containing all playbooks (relative to working directory, or absolute)
+  dir: ansible_automasi
+
+  # Inventory file.
+  # Can be overridden at runtime via --inventory flag or ANSIBLE_INVENTORY env var.
+  inventory: ansible_automasi/inventory.ini
+
+  # These three playbooks always run in this order before each forwarder setup.
+  # They configure the base environment, routes, and helper scripts.
+  setup_playbooks:
+    - 01_basic_setup.yaml
+    - 02_setup_route.yaml
+    - 03_setup_scripts.yaml
+
+  # Playbook that launches pktgen (runs asynchronously; start/stop signals coordinate it)
+  pktgen_playbook: 05_start_pktgen.yaml
+
+  # Forwarder-specific setup playbooks.
+  # Keys must exactly match the forwarder names used in experiment.yaml.
+  forwarder_playbooks:
+    vpp:    04_stup_vpp_node6.yaml
+    xdp:    04_setup_xdp_node6.yaml
+    kernel: 04_setup_kernel_node6.yaml
+
+  # Human-readable labels used as prefixes in result directory names.
+  # Example: XDP_1024-1029_Port_No_Block_41
+  forwarder_labels:
+    vpp:    VPP
+    xdp:    XDP
+    kernel: Kernel
+
+
+
+# Traffic direction definitions.
+# Each top-level key is a direction name that experiment.yaml can reference.
+# nodes: maps the pktgen control IP of each sender node → path to its .pkt script.
+traffic_directions:
+  # Node 4 sends traffic toward Node 1 (unidirectional)
+  "41":
+    nodes:
+      10.90.1.4: /home/ansible/node4_send.pkt
+
+  # Node 1 sends traffic toward Node 5 (unidirectional, passes through forwarder)
+  "15":
+    nodes:
+      10.90.1.1: /home/ansible/node1_send.pkt
+
+  # Both nodes send simultaneously (bidirectional)
+  "15_41":
+    nodes:
+      10.90.1.4: /home/ansible/node4_send.pkt
+      10.90.1.1: /home/ansible/node1_send.pkt
+
+
+# Result quality validation settings.
+validation:
+  # node5.csv files at or below this byte size are treated as header-only
+  # (the getstats.lua header line "Time,Port,Metric,Value\n" is 23 bytes).
+  # A header-only file means no traffic data was collected from Node 5.
+  node5_csv_header_size: 23
+
+  # Directions where a non-empty node5.csv is required to pass validation.
+  # The "41" direction only sends Node4→Node1 and never reaches Node 5,
+  # so header-only node5.csv is expected and not treated as a failure.
+  directions_requiring_node5:
+    - "15"
+    - "15_41"

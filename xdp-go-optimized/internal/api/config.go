@@ -1,8 +1,10 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
+	"github.com/telmat/xdp-go/internal/config"
 	"github.com/telmat/xdp-go/internal/maps"
 )
 
@@ -97,5 +99,48 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Snapshot the full current BPF map state so we can persist it and keep
+	// the manager's in-memory config in sync. Both are needed: the file so the
+	// daemon re-reads it on process restart; the in-memory update so the next
+	// Stop+Start cycle (Ansible) uses the latest port list without a full restart.
+	tcpPorts, _ := maps.ListPorts(objs.BlockedPortsTcp)
+	udpPorts, _ := maps.ListPorts(objs.BlockedPortsUdp)
+	protos, _ := maps.ListProtos(objs.BlockedProtos)
+	flags, _ := maps.ReadFlags(objs.FwConfig)
+
+	saveCfg := &config.XDPConfig{
+		BlockedPorts: &config.BlockedPorts{
+			TCP: tcpPorts,
+			UDP: udpPorts,
+		},
+		BlockedProtocols: protos,
+		FirewallFlags:    fwFlagsToConfig(flags),
+	}
+
+	// Update in-memory config so the next Start() call (after Ansible stop+start)
+	// applies the saved port list instead of the original startup defaults.
+	s.mgr.SetConfig(saveCfg)
+
+	if s.cfgPath != "" {
+		if err := config.Save(s.cfgPath, saveCfg); err != nil {
+			log.Printf("warning: failed to persist config to %s: %v", s.cfgPath, err)
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func fwFlagsToConfig(f maps.FwFlags) *config.FwFlagsConfig {
+	b := func(v bool) *bool { return &v }
+	return &config.FwFlagsConfig{
+		BlockICMPPing:         b(f.BlockICMPPing),
+		BlockIPFragments:      b(f.BlockIPFragments),
+		BlockMalformedTC:      b(f.BlockMalformedTC),
+		BlockAllTCP:           b(f.BlockAllTCP),
+		BlockAllUDP:           b(f.BlockAllUDP),
+		BlockBroadcast:        b(f.BlockBroadcast),
+		BlockMulticast:        b(f.BlockMulticast),
+		EventsEnabled:         b(f.EventsEnabled),
+		SecurityEventsEnabled: b(f.SecurityEventsEnabled),
+	}
 }

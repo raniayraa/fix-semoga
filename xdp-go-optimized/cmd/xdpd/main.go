@@ -71,7 +71,7 @@ func main() {
 	defer store.Close()
 
 	mgr := xdp.NewManager(*iface, *redirectDev, cfg)
-	srv := api.NewServer(mgr, store)
+	srv := api.NewServer(mgr, store, *configPath)
 
 	httpSrv := &http.Server{
 		Addr:         *addr,

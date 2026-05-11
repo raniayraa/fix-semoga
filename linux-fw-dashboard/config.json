@@ -8,7 +8,9 @@
     "block_broadcast": false,
     "block_multicast": false
   },
-  "tcp_ports": null,
+  "tcp_ports": [
+    1024
+  ],
   "udp_ports": [],
   "protos": null
 }

@@ -1,0 +1,129 @@
+
+Experiment sweep: 1 port(s) × 1 forwarder(s) × 1 direction(s) = 1 runs
+  Ports:      [300]
+  Forwarders: ['vpp']
+  Directions: ['41']
+  Duration:   15s per run
+  Setup wait: 10s
+
+════════════════════════════════════════════════════════════
+[1/1] VPP | 300 Port(s) | Direction: 41
+════════════════════════════════════════════════════════════
+
+  [1/5] Modifying pkt files ... OK
+  [2/5] Updating pktgen_config.json ... OK
+  [3/5] Running setup playbooks ...
+    Running 01_basic_setup.yaml ... 
+PLAY [Basic network interface setup] *******************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [10.90.1.6]
+ok: [10.90.1.5]
+ok: [10.90.1.4]
+ok: [10.90.1.1]
+
+TASK [Kill any existing pktgen process] ****************************************
+skipping: [10.90.1.6]
+changed: [10.90.1.1]
+changed: [10.90.1.4]
+changed: [10.90.1.5]
+
+TASK [Bind NICs to kernel driver] **********************************************
+skipping: [10.90.1.6]
+changed: [10.90.1.5]
+changed: [10.90.1.4]
+changed: [10.90.1.1]
+
+TASK [Bring up interface, flush addresses, disable RA] *************************
+failed: [10.90.1.6] (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.56.6/24', 'ipv6': 'fd00:56::6/64'}}) => {"ansible_loop_var": "item", "changed": true, "cmd": "set -e\nip link set enp1s0f0np0 up\nip addr flush dev enp1s0f0np0\nip -6 addr flush dev enp1s0f0np0\nsysctl -w net.ipv6.conf.enp1s0f0np0.accept_ra=0\n", "delta": "0:00:00.004230", "end": "2026-05-07 13:41:28.642404", "item": {"key": "enp1s0f0np0", "value": {"ipv4": "192.168.56.6/24", "ipv6": "fd00:56::6/64"}}, "msg": "non-zero return code", "rc": 1, "start": "2026-05-07 13:41:28.638174", "stderr": "Cannot find device \"enp1s0f0np0\"", "stderr_lines": ["Cannot find device \"enp1s0f0np0\""], "stdout": "", "stdout_lines": []}
+changed: [10.90.1.4] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.4/24', 'ipv6': 'fd00:46::4/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.46.1/24', 'ipv6': 'fd00:46::1/64'}})
+changed: [10.90.1.5] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.5/24', 'ipv6': 'fd00:56::5/64'}})
+failed: [10.90.1.6] (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.6/24', 'ipv6': 'fd00:46::6/64'}}) => {"ansible_loop_var": "item", "changed": true, "cmd": "set -e\nip link set enp1s0f1np1 up\nip addr flush dev enp1s0f1np1\nip -6 addr flush dev enp1s0f1np1\nsysctl -w net.ipv6.conf.enp1s0f1np1.accept_ra=0\n", "delta": "0:00:00.004052", "end": "2026-05-07 13:41:28.782606", "item": {"key": "enp1s0f1np1", "value": {"ipv4": "192.168.46.6/24", "ipv6": "fd00:46::6/64"}}, "msg": "non-zero return code", "rc": 1, "start": "2026-05-07 13:41:28.778554", "stderr": "Cannot find device \"enp1s0f1np1\"", "stderr_lines": ["Cannot find device \"enp1s0f1np1\""], "stdout": "", "stdout_lines": []}
+changed: [10.90.1.1] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.1/24', 'ipv6': 'fd00:56::1/64'}})
+
+TASK [Assign IPv4 address] *****************************************************
+changed: [10.90.1.4] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.4/24', 'ipv6': 'fd00:46::4/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.46.1/24', 'ipv6': 'fd00:46::1/64'}})
+changed: [10.90.1.5] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.5/24', 'ipv6': 'fd00:56::5/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.1/24', 'ipv6': 'fd00:56::1/64'}})
+
+TASK [Assign IPv6 address] *****************************************************
+changed: [10.90.1.4] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.4/24', 'ipv6': 'fd00:46::4/64'}})
+changed: [10.90.1.5] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.5/24', 'ipv6': 'fd00:56::5/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.46.1/24', 'ipv6': 'fd00:46::1/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.1/24', 'ipv6': 'fd00:56::1/64'}})
+
+TASK [Show interface addresses] ************************************************
+changed: [10.90.1.1] => (item={'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.46.1/24', 'ipv6': 'fd00:46::1/64'}})
+changed: [10.90.1.5] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.5/24', 'ipv6': 'fd00:56::5/64'}})
+changed: [10.90.1.4] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.4/24', 'ipv6': 'fd00:46::4/64'}})
+changed: [10.90.1.1] => (item={'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.1/24', 'ipv6': 'fd00:56::1/64'}})
+
+TASK [Print interface addresses] ***********************************************
+ok: [10.90.1.1] => (item={'changed': True, 'stdout': '10: enp1s0f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000\n    link/ether 64:9d:99:ff:f5:7a brd ff:ff:ff:ff:ff:ff\n    inet 192.168.46.1/24 scope global enp1s0f0np0\n       valid_lft forever preferred_lft forever\n    inet6 fd00:46::1/64 scope global tentative \n       valid_lft forever preferred_lft forever\n    inet6 fe80::3ea5:c17:f8a4:b289/64 scope link tentative noprefixroute \n       valid_lft forever preferred_lft forever', 'stderr': '', 'rc': 0, 'cmd': 'ip addr show dev enp1s0f0np0', 'start': '2026-05-07 13:41:29.964333', 'end': '2026-05-07 13:41:29.966766', 'delta': '0:00:00.002433', 'msg': '', 'invocation': {'module_args': {'_raw_params': 'ip addr show dev enp1s0f0np0', '_uses_shell': True, 'expand_argument_vars': True, 'stdin_add_newline': True, 'strip_empty_ends': True, 'argv': None, 'chdir': None, 'executable': None, 'creates': None, 'removes': None, 'stdin': None}}, 'stdout_lines': ['10: enp1s0f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000', '    link/ether 64:9d:99:ff:f5:7a brd ff:ff:ff:ff:ff:ff', '    inet 192.168.46.1/24 scope global enp1s0f0np0', '       valid_lft forever preferred_lft forever', '    inet6 fd00:46::1/64 scope global tentative ', '       valid_lft forever preferred_lft forever', '    inet6 fe80::3ea5:c17:f8a4:b289/64 scope link tentative noprefixroute ', '       valid_lft forever preferred_lft forever'], 'stderr_lines': [], 'failed': False, 'item': {'key': 'enp1s0f0np0', 'value': {'ipv4': '192.168.46.1/24', 'ipv6': 'fd00:46::1/64'}}, 'ansible_loop_var': 'item'}) => {
+    "msg": [
+        "10: enp1s0f0np0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000",
+        "    link/ether 64:9d:99:ff:f5:7a brd ff:ff:ff:ff:ff:ff",
+        "    inet 192.168.46.1/24 scope global enp1s0f0np0",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fd00:46::1/64 scope global tentative ",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fe80::3ea5:c17:f8a4:b289/64 scope link tentative noprefixroute ",
+        "       valid_lft forever preferred_lft forever"
+    ]
+}
+ok: [10.90.1.1] => (item={'changed': True, 'stdout': '9: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000\n    link/ether 64:9d:99:ff:f5:7b brd ff:ff:ff:ff:ff:ff\n    inet 192.168.56.1/24 scope global enp1s0f1np1\n       valid_lft forever preferred_lft forever\n    inet6 fd00:56::1/64 scope global tentative \n       valid_lft forever preferred_lft forever\n    inet6 fe80::94d:1993:44b4:b70d/64 scope link tentative noprefixroute \n       valid_lft forever preferred_lft forever', 'stderr': '', 'rc': 0, 'cmd': 'ip addr show dev enp1s0f1np1', 'start': '2026-05-07 13:41:30.145854', 'end': '2026-05-07 13:41:30.148288', 'delta': '0:00:00.002434', 'msg': '', 'invocation': {'module_args': {'_raw_params': 'ip addr show dev enp1s0f1np1', '_uses_shell': True, 'expand_argument_vars': True, 'stdin_add_newline': True, 'strip_empty_ends': True, 'argv': None, 'chdir': None, 'executable': None, 'creates': None, 'removes': None, 'stdin': None}}, 'stdout_lines': ['9: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000', '    link/ether 64:9d:99:ff:f5:7b brd ff:ff:ff:ff:ff:ff', '    inet 192.168.56.1/24 scope global enp1s0f1np1', '       valid_lft forever preferred_lft forever', '    inet6 fd00:56::1/64 scope global tentative ', '       valid_lft forever preferred_lft forever', '    inet6 fe80::94d:1993:44b4:b70d/64 scope link tentative noprefixroute ', '       valid_lft forever preferred_lft forever'], 'stderr_lines': [], 'failed': False, 'item': {'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.1/24', 'ipv6': 'fd00:56::1/64'}}, 'ansible_loop_var': 'item'}) => {
+    "msg": [
+        "9: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000",
+        "    link/ether 64:9d:99:ff:f5:7b brd ff:ff:ff:ff:ff:ff",
+        "    inet 192.168.56.1/24 scope global enp1s0f1np1",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fd00:56::1/64 scope global tentative ",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fe80::94d:1993:44b4:b70d/64 scope link tentative noprefixroute ",
+        "       valid_lft forever preferred_lft forever"
+    ]
+}
+ok: [10.90.1.4] => (item={'changed': True, 'stdout': '8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000\n    link/ether 64:9d:99:ff:e7:af brd ff:ff:ff:ff:ff:ff\n    inet 192.168.46.4/24 scope global enp1s0f1np1\n       valid_lft forever preferred_lft forever\n    inet6 fd00:46::4/64 scope global tentative \n       valid_lft forever preferred_lft forever\n    inet6 fe80::a822:4be4:da23:1f60/64 scope link noprefixroute \n       valid_lft forever preferred_lft forever', 'stderr': '', 'rc': 0, 'cmd': 'ip addr show dev enp1s0f1np1', 'start': '2026-05-07 19:27:17.172239', 'end': '2026-05-07 19:27:17.174823', 'delta': '0:00:00.002584', 'msg': '', 'invocation': {'module_args': {'_raw_params': 'ip addr show dev enp1s0f1np1', '_uses_shell': True, 'expand_argument_vars': True, 'stdin_add_newline': True, 'strip_empty_ends': True, 'argv': None, 'chdir': None, 'executable': None, 'creates': None, 'removes': None, 'stdin': None}}, 'stdout_lines': ['8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000', '    link/ether 64:9d:99:ff:e7:af brd ff:ff:ff:ff:ff:ff', '    inet 192.168.46.4/24 scope global enp1s0f1np1', '       valid_lft forever preferred_lft forever', '    inet6 fd00:46::4/64 scope global tentative ', '       valid_lft forever preferred_lft forever', '    inet6 fe80::a822:4be4:da23:1f60/64 scope link noprefixroute ', '       valid_lft forever preferred_lft forever'], 'stderr_lines': [], 'failed': False, 'item': {'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.46.4/24', 'ipv6': 'fd00:46::4/64'}}, 'ansible_loop_var': 'item'}) => {
+    "msg": [
+        "8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000",
+        "    link/ether 64:9d:99:ff:e7:af brd ff:ff:ff:ff:ff:ff",
+        "    inet 192.168.46.4/24 scope global enp1s0f1np1",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fd00:46::4/64 scope global tentative ",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fe80::a822:4be4:da23:1f60/64 scope link noprefixroute ",
+        "       valid_lft forever preferred_lft forever"
+    ]
+}
+ok: [10.90.1.5] => (item={'changed': True, 'stdout': '8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000\n    link/ether 64:9d:99:ff:e6:cf brd ff:ff:ff:ff:ff:ff\n    inet 192.168.56.5/24 scope global enp1s0f1np1\n       valid_lft forever preferred_lft forever\n    inet6 fd00:56::5/64 scope global tentative \n       valid_lft forever preferred_lft forever\n    inet6 fe80::a389:3d80:b823:4886/64 scope link tentative noprefixroute \n       valid_lft forever preferred_lft forever', 'stderr': '', 'rc': 0, 'cmd': 'ip addr show dev enp1s0f1np1', 'start': '2026-05-07 13:41:29.967732', 'end': '2026-05-07 13:41:29.970149', 'delta': '0:00:00.002417', 'msg': '', 'invocation': {'module_args': {'_raw_params': 'ip addr show dev enp1s0f1np1', '_uses_shell': True, 'expand_argument_vars': True, 'stdin_add_newline': True, 'strip_empty_ends': True, 'argv': None, 'chdir': None, 'executable': None, 'creates': None, 'removes': None, 'stdin': None}}, 'stdout_lines': ['8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000', '    link/ether 64:9d:99:ff:e6:cf brd ff:ff:ff:ff:ff:ff', '    inet 192.168.56.5/24 scope global enp1s0f1np1', '       valid_lft forever preferred_lft forever', '    inet6 fd00:56::5/64 scope global tentative ', '       valid_lft forever preferred_lft forever', '    inet6 fe80::a389:3d80:b823:4886/64 scope link tentative noprefixroute ', '       valid_lft forever preferred_lft forever'], 'stderr_lines': [], 'failed': False, 'item': {'key': 'enp1s0f1np1', 'value': {'ipv4': '192.168.56.5/24', 'ipv6': 'fd00:56::5/64'}}, 'ansible_loop_var': 'item'}) => {
+    "msg": [
+        "8: enp1s0f1np1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000",
+        "    link/ether 64:9d:99:ff:e6:cf brd ff:ff:ff:ff:ff:ff",
+        "    inet 192.168.56.5/24 scope global enp1s0f1np1",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fd00:56::5/64 scope global tentative ",
+        "       valid_lft forever preferred_lft forever",
+        "    inet6 fe80::a389:3d80:b823:4886/64 scope link tentative noprefixroute ",
+        "       valid_lft forever preferred_lft forever"
+    ]
+}
+
+PLAY RECAP *********************************************************************
+10.90.1.1                  : ok=8    changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.4                  : ok=8    changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.5                  : ok=8    changed=6    unreachable=0    failed=0    skipped=0    rescued=0    ignored=0   
+10.90.1.6                  : ok=1    changed=0    unreachable=0    failed=1    skipped=2    rescued=0    ignored=0   
+
+FAILED (exit 2)
+  ERROR: 01_basic_setup.yaml failed — skipping this experiment.
+
+════════════════════════════════════════════════════════════
+Sweep complete: 0/1 ansible runs succeeded.
+
+Failed (ansible error):
+  VPP_300_Port_No_Block_41
+
+Degraded results (node5.csv empty — forwarder may not have reached Node 5):
+  VPP_300_Port_No_Block_41

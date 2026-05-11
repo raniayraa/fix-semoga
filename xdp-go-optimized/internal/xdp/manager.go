@@ -344,6 +344,15 @@ func (m *Manager) RedirectDev() string {
 	return m.redirectDev
 }
 
+// SetConfig replaces the in-memory startup config used by the next Start() call.
+// This keeps the manager's config in sync when handlePutConfig persists changes
+// to turbo.json, so a subsequent Stop+Start restores the updated port lists.
+func (m *Manager) SetConfig(cfg *config.XDPConfig) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.cfg = cfg
+}
+
 // Reconfigure updates the ingress and egress interface names.
 // XDP must be stopped before calling this.
 func (m *Manager) Reconfigure(ifname, redirectDev string) error {

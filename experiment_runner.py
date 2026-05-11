@@ -2,13 +2,19 @@
 """
 Experiment automation script for pktgen port-range sweeps.
 
-Sweeps across port counts, forwarder types (VPP → XDP → Kernel), and traffic
+Sweeps across port ranges, forwarder types (VPP → XDP → Kernel), and traffic
 directions, running the full ansible playbook sequence for each combination.
 
+--ports takes actual port numbers (start-end), not counts:
+  Single port:    --ports 1024
+  Range:          --ports 1024-1029
+  Multiple:       --ports 1024-1029,2000-2010
+  Many ranges:    --ports 1024-1029,1024-1099,1024-1999
+
 Usage examples:
-  python experiment_runner.py --ports 1-10 --traffic 41,15,15_41 --inventory hosts.ini
-  python experiment_runner.py --ports 1,10,100,1000 --traffic 41 --dry-run
-  python experiment_runner.py --ports 1-5,100 --traffic 15_41 --duration 30
+  python experiment_runner.py --ports 1024-1029 --traffic 41,15,15_41 --inventory hosts.ini
+  python experiment_runner.py --ports 1024-1029,1024-2048 --traffic 41 --dry-run
+  python experiment_runner.py --ports 1024-1543 --traffic 15_41 --duration 30
 """
 
 import argparse
@@ -34,9 +40,9 @@ PKT_NODES = ["node1_send.pkt", "node4_send.pkt"]
 FORWARDERS = ["vpp", "xdp", "kernel"]
 
 FORWARDER_PLAYBOOK = {
-    "vpp":    "04_stup_vpp_node6.yaml",
-    "xdp":    "04_setup_xdp_node6.yaml",
-    "kernel": "04_setup_kernel_node6.yaml",
+    "vpp":    "05_setup_vpp_node6.yaml",
+    "xdp":    "05_setup_xdp_node6.yaml",
+    "kernel": "05_setup_kernel_node6.yaml",
 }
 
 FORWARDER_LABEL = {
@@ -46,15 +52,178 @@ FORWARDER_LABEL = {
 }
 
 PKTGEN_CONFIG_MAP = {
-    "41":    {"10.90.1.4": "/home/ansible/node4_send.pkt"},
-    "15":    {"10.90.1.1": "/home/ansible/node1_send.pkt"},
+    "41":    {"10.90.1.4": "/home/telmat/node4_send.pkt"},
+    "15":    {"10.90.1.1": "/home/telmat/node1_send.pkt"},
     "15_41": {
-        "10.90.1.4": "/home/ansible/node4_send.pkt",
-        "10.90.1.1": "/home/ansible/node1_send.pkt",
+        "10.90.1.4": "/home/telmat/node4_send.pkt",
+        "10.90.1.1": "/home/telmat/node1_send.pkt",
     },
 }
 
 VALID_DIRECTIONS = {"41", "15", "15_41"}
+
+# ---------------------------------------------------------------------------
+# Multi-route XDP support
+# ---------------------------------------------------------------------------
+
+XDP_API_BASE  = "http://localhost:9898/api"
+XDP_IFACE_IN  = "enp1s0f1np1"
+XDP_IFACE_OUT = "enp1s0f0np0"
+XDP_SRC_MAC   = "64:9d:99:ff:f5:9a"   # Node 6 egress NIC — same for every route
+
+REAL_ROUTES: list[dict] = [
+    {"ip": "192.168.56.5", "dst_mac": "64:9d:99:ff:e6:cf"},
+    {"ip": "192.168.56.1", "dst_mac": "64:9d:99:ff:f5:7b"},
+    {"ip": "192.168.46.4", "dst_mac": "64:9d:99:ff:e7:af"},
+    {"ip": "192.168.46.1", "dst_mac": "64:9d:99:ff:f5:7a"},
+]
+_REAL_SUBNETS = frozenset(r["ip"].split(".")[2] for r in REAL_ROUTES)   # {'46', '56'}
+_REAL_IPS     = frozenset(r["ip"] for r in REAL_ROUTES)
+
+MULTIROUTE_PLAYBOOK = "04_setup_xdp_node6_multiroute.yaml"
+
+
+def _dummy_mac(index: int) -> str:
+    """Locally-administered unicast MAC derived from a counter."""
+    return (
+        f"02:00:00:"
+        f"{(index >> 16) & 0xFF:02x}:"
+        f"{(index >>  8) & 0xFF:02x}:"
+        f"{index         & 0xFF:02x}"
+    )
+
+
+def _dummy_ips(need: int) -> list[str]:
+    """Collect dummy IPs from 192.168.x.y, skipping real subnets and real IPs."""
+    out: list[str] = []
+    for third in range(1, 256):
+        if str(third) in _REAL_SUBNETS:
+            continue
+        for fourth in range(1, 255):
+            ip = f"192.168.{third}.{fourth}"
+            if ip not in _REAL_IPS:
+                out.append(ip)
+                if len(out) == need:
+                    return out
+    raise ValueError(f"Cannot generate {need} dummy IPs from 192.168.0.0/16")
+
+
+def build_xdp_routes(total: int) -> list[dict]:
+    """Return exactly `total` route dicts, always starting with REAL_ROUTES."""
+    if total < len(REAL_ROUTES):
+        raise ValueError(
+            f"--route-count must be >= {len(REAL_ROUTES)} "
+            f"(the {len(REAL_ROUTES)} real routes are always included)"
+        )
+    routes = [
+        {"ip": r["ip"], "dst_mac": r["dst_mac"],
+         "src_mac": XDP_SRC_MAC, "action": "redirect"}
+        for r in REAL_ROUTES
+    ]
+    extra = total - len(REAL_ROUTES)
+    if extra:
+        for idx, ip in enumerate(_dummy_ips(extra)):
+            routes.append({
+                "ip":      ip,
+                "dst_mac": _dummy_mac(idx),
+                "src_mac": XDP_SRC_MAC,
+                "action":  "redirect",
+            })
+    return routes
+
+
+# Tasks block is a plain string so Jinja2 {{ }} delimiters survive as-is.
+_XDP_TASKS = """\
+  tasks:
+    - name: Stop XDP if already running
+      ansible.builtin.uri:
+        url: "{{ api_base }}/stop"
+        method: POST
+        status_code: [200, 409]
+      ignore_errors: true
+
+    - name: Set ingress and egress interfaces
+      ansible.builtin.uri:
+        url: "{{ api_base }}/system/settings"
+        method: PUT
+        body_format: json
+        body:
+          iface: "{{ iface_ingress }}"
+          redirect_dev: "{{ iface_egress }}"
+        status_code: 200
+
+    - name: Start XDP program
+      ansible.builtin.uri:
+        url: "{{ api_base }}/start"
+        method: POST
+        status_code: 200
+
+    - name: Register egress NIC in devmap (slot 0)
+      ansible.builtin.uri:
+        url: "{{ api_base }}/devmap"
+        method: POST
+        body_format: json
+        body:
+          slot: 0
+          iface: "{{ iface_egress }}"
+        status_code: 200
+
+    - name: Add forwarding table entries
+      ansible.builtin.uri:
+        url: "{{ api_base }}/routes"
+        method: POST
+        body_format: json
+        body:
+          ip: "{{ item.ip }}"
+          dst_mac: "{{ item.dst_mac }}"
+          src_mac: "{{ item.src_mac }}"
+          action: "{{ item.action }}"
+        status_code: 201
+      loop: "{{ fwd_entries }}"
+
+    - name: Verify forwarding table
+      ansible.builtin.uri:
+        url: "{{ api_base }}/routes"
+        method: GET
+        status_code: 200
+      register: routes_out
+
+    - name: Print forwarding table
+      ansible.builtin.debug:
+        msg: "{{ routes_out.json }}"
+"""
+
+
+def render_xdp_multiroute_playbook(routes: list[dict]) -> str:
+    """Return a complete Ansible playbook YAML string with `routes` embedded."""
+    n_dummy = len(routes) - len(REAL_ROUTES)
+    entries = "\n".join(
+        f'      - ip: "{r["ip"]}"\n'
+        f'        dst_mac: "{r["dst_mac"]}"\n'
+        f'        src_mac: "{r["src_mac"]}"\n'
+        f'        action: "{r["action"]}"'
+        for r in routes
+    )
+    header = (
+        "---\n"
+        "# Auto-generated by experiment_runner.py — do not edit by hand.\n"
+        f"# {len(routes)} forwarding entries: {len(REAL_ROUTES)} real + {n_dummy} dummy.\n"
+        f"- name: Configure XDP forwarder on Node 6 via API ({len(routes)} route entries)\n"
+        "  hosts: localhost\n"
+        "  connection: local\n"
+        "  gather_facts: false\n"
+        "\n"
+        "  vars:\n"
+        f'    api_base: "{XDP_API_BASE}"\n'
+        f'    iface_ingress: "{XDP_IFACE_IN}"\n'
+        f'    iface_egress:  "{XDP_IFACE_OUT}"\n'
+        "    fwd_entries:\n"
+        f"{entries}\n"
+        "\n"
+    )
+    return header + _XDP_TASKS
+
+# ---------------------------------------------------------------------------
 
 SETUP_PLAYBOOKS = [
     "01_basic_setup.yaml",
@@ -66,9 +235,16 @@ SETUP_PLAYBOOKS = [
 # Port range parser
 # ---------------------------------------------------------------------------
 
-def parse_ports(spec: str) -> list[int]:
-    """Parse port spec: "1-10", "1,10,100", "1-5,100,1000" → sorted unique list."""
-    result = set()
+def parse_ports(spec: str) -> list[tuple[int, int]]:
+    """Parse port spec into a list of (start, end) ranges.
+
+    Examples:
+      "1024"             → [(1024, 1024)]
+      "1024-1029"        → [(1024, 1029)]
+      "1024-1029,2000-2010" → [(1024, 1029), (2000, 2010)]
+    """
+    result = []
+    seen = set()
     for part in spec.split(","):
         part = part.strip()
         if not part:
@@ -77,13 +253,16 @@ def parse_ports(spec: str) -> list[int]:
             lo, hi = part.split("-", 1)
             lo, hi = int(lo.strip()), int(hi.strip())
             if lo > hi:
-                raise ValueError(f"Invalid range {part}: start > end")
-            result.update(range(lo, hi + 1))
+                raise ValueError(f"Invalid range '{part}': start > end")
         else:
-            result.add(int(part))
+            lo = hi = int(part)
+        key = (lo, hi)
+        if key not in seen:
+            seen.add(key)
+            result.append(key)
     if not result:
         raise ValueError("No ports parsed from spec: " + spec)
-    return sorted(result)
+    return result
 
 
 def parse_directions(spec: str) -> list[str]:
@@ -102,11 +281,9 @@ PORT_LINE_RE = re.compile(
 )
 
 
-def set_port_range(content: str, n_ports: int) -> str:
-    """Rewrite all src/dst port start/min/max lines for n_ports."""
-    port_min   = 1024
-    port_start = 1024
-    port_max   = 1024 + n_ports - 1
+def set_port_range(content: str, port_start: int, port_end: int) -> str:
+    """Rewrite all src/dst port start/min/max lines to [port_start, port_end]."""
+    value_map = {"start": port_start, "min": port_start, "max": port_end}
 
     lines = content.splitlines(keepends=True)
     out = []
@@ -115,10 +292,7 @@ def set_port_range(content: str, n_ports: int) -> str:
         if m:
             prefix = m.group(1)
             keyword = prefix.split()[-1]  # start / min / max
-            value = {"start": port_start, "min": port_min, "max": port_max}[keyword]
-            # preserve original spacing width
-            orig_spacing = line[len(m.group(1)):-len(m.group(2).rstrip()) - 1]
-            # rebuild with same column width as original (at least one space)
+            value = value_map[keyword]
             gap = line[len(m.group(1)) : line.index(m.group(2), len(m.group(1)))]
             out.append(f"{prefix}{gap}{value}\n")
         else:
@@ -126,14 +300,14 @@ def set_port_range(content: str, n_ports: int) -> str:
     return "".join(out)
 
 
-def update_pkt_files(n_ports: int, dry_run: bool) -> None:
+def update_pkt_files(port_start: int, port_end: int, dry_run: bool) -> None:
     for fname in PKT_NODES:
         path = PKT_FILES_DIR / fname
         if dry_run:
-            print(f"    [dry-run] would write port max={1024 + n_ports - 1} to {path}")
+            print(f"    [dry-run] would write port range {port_start}-{port_end} to {path}")
             continue
         original = path.read_text()
-        updated = set_port_range(original, n_ports)
+        updated = set_port_range(original, port_start, port_end)
         path.write_text(updated)
 
 
@@ -212,7 +386,8 @@ def validate_results(result_dir: Path, direction: str) -> bool:
 # ---------------------------------------------------------------------------
 
 def run_experiment(
-    port_count: int,
+    port_start: int,
+    port_end: int,
     forwarder: str,
     direction: str,
     ansible_dir: Path,
@@ -220,10 +395,11 @@ def run_experiment(
     duration: int,
     setup_wait: int,
     dry_run: bool,
+    route_count: int | None = None,
 ) -> tuple[bool, bool]:
     """Run one experiment. Returns (ansible_ok, data_ok)."""
     print(f"\n  [1/5] Modifying pkt files ...", end=" ", flush=True)
-    update_pkt_files(port_count, dry_run)
+    update_pkt_files(port_start, port_end, dry_run)
     if not dry_run:
         print("OK")
 
@@ -240,19 +416,36 @@ def run_experiment(
             return False, False
 
     print(f"  [4/5] Running forwarder setup ({forwarder}) ...")
-    ok = run_playbook(FORWARDER_PLAYBOOK[forwarder], ansible_dir, inventory,
-                      FORWARDER_PLAYBOOK[forwarder], dry_run)
+    if forwarder == "xdp" and route_count is not None:
+        routes = build_xdp_routes(route_count)
+        pb_path = ansible_dir / MULTIROUTE_PLAYBOOK
+        if dry_run:
+            print(f"    [dry-run] would generate {pb_path} with {route_count} routes "
+                  f"({len(REAL_ROUTES)} real + {route_count - len(REAL_ROUTES)} dummy)")
+        else:
+            pb_path.write_text(render_xdp_multiroute_playbook(routes))
+            print(f"    Generated {pb_path.name} ({route_count} entries)")
+        forwarder_pb = MULTIROUTE_PLAYBOOK
+    else:
+        forwarder_pb = FORWARDER_PLAYBOOK[forwarder]
+    ok = run_playbook(forwarder_pb, ansible_dir, inventory, forwarder_pb, dry_run)
     if not ok:
         print(f"  ERROR: forwarder setup failed — skipping this experiment.")
         return False, False
 
     print(f"  [5/5] Running pktgen experiment ...")
 
+    port_label = f"{port_start}-{port_end}" if port_start != port_end else str(port_start)
+    fw_label = (
+        f"XDP_{route_count}r"
+        if forwarder == "xdp" and route_count is not None
+        else FORWARDER_LABEL[forwarder]
+    )
     if dry_run:
-        print(f"    [dry-run] would: launch 05_start_pktgen.yaml, wait {setup_wait}s,")
+        print(f"    [dry-run] would: launch 04_start_pktgen.yaml, wait {setup_wait}s,")
         print(f"              touch start signal, wait {duration}s, touch stop signal,")
         print(f"              wait for ansible, rename result dir to "
-              f"{FORWARDER_LABEL[forwarder]}_{port_count}_Port_No_Block_{direction}")
+              f"{fw_label}_{port_label}_Port_No_Block_{direction}")
         print(f"              validate node5.csv for direction '{direction}'")
         return True, True
 
@@ -264,7 +457,7 @@ def run_experiment(
     SIGNAL_STOP.unlink(missing_ok=True)
 
     cmd = ["ansible-playbook", "-i", inventory,
-           str(ansible_dir / "05_start_pktgen.yaml")]
+           str(ansible_dir / "04_start_pktgen.yaml")]
     proc = subprocess.Popen(cmd)
 
     # Wait for pktgen to initialize (playbook sleeps 5s internally)
@@ -283,7 +476,7 @@ def run_experiment(
     print(f"done (exit {proc.returncode})")
 
     if proc.returncode != 0:
-        print("  WARNING: 05_start_pktgen.yaml exited non-zero — results may be incomplete.")
+        print("  WARNING: 04_start_pktgen.yaml exited non-zero — results may be incomplete.")
 
     # Find and rename new result directory
     result_dir = None
@@ -291,7 +484,7 @@ def run_experiment(
         new_dirs = set(RESULTS_DIR.iterdir()) - existing
         if new_dirs:
             newest = max(new_dirs, key=lambda d: d.stat().st_mtime)
-            target_name = f"{FORWARDER_LABEL[forwarder]}_{port_count}_Port_No_Block_{direction}"
+            target_name = f"{fw_label}_{port_label}_Port_No_Block_{direction}"
             target = unique_name(RESULTS_DIR / target_name)
             newest.rename(target)
             result_dir = target
@@ -314,7 +507,10 @@ def main() -> None:
     )
     parser.add_argument(
         "--ports", required=True,
-        help='Port counts to sweep. Range: "1-10". List: "1,10,100". Mixed: "1-5,100,1000".',
+        help=(
+            'Port range(s) for traffic (actual port numbers, not counts). '
+            'Single: "1024". Range: "1024-1029". Multiple: "1024-1029,2000-2010".'
+        ),
     )
     parser.add_argument(
         "--traffic", required=True,
@@ -345,6 +541,15 @@ def main() -> None:
         help="Forwarder(s) to run: vpp, xdp, kernel (default: all three).",
     )
     parser.add_argument(
+        "--route-count", type=int, default=None, metavar="N",
+        help=(
+            "Total XDP forwarding-table entries (>= 4, only applies to 'xdp' forwarder). "
+            "The 4 real routes are always first; remainder are dummy entries spread across "
+            "192.168.0.0/16 (skipping .46.x and .56.x). "
+            "Result dirs use XDP_<N>r_ prefix. Default: use the standard 2-entry playbook."
+        ),
+    )
+    parser.add_argument(
         "--dry-run", action="store_true",
         help="Print what would happen without executing anything.",
     )
@@ -352,6 +557,10 @@ def main() -> None:
 
     if not args.dry_run and not args.inventory:
         parser.error("--inventory is required (or set ANSIBLE_INVENTORY env var)")
+
+    if args.route_count is not None and args.route_count < len(REAL_ROUTES):
+        parser.error(f"--route-count must be >= {len(REAL_ROUTES)} "
+                     f"(the {len(REAL_ROUTES)} real routes are always included)")
 
     try:
         ports = parse_ports(args.ports)
@@ -369,32 +578,40 @@ def main() -> None:
 
     # Build full experiment list
     experiments = [
-        (port, fw, direction)
-        for port in ports
+        (pstart, pend, fw, direction)
+        for (pstart, pend) in ports
         for fw in args.forwarder
         for direction in directions
     ]
     total = len(experiments)
 
-    print(f"\nExperiment sweep: {len(ports)} port(s) × {len(args.forwarder)} forwarder(s) × {len(directions)} direction(s) = {total} runs")
-    print(f"  Ports:      {ports}")
-    print(f"  Forwarders: {args.forwarder}")
-    print(f"  Directions: {directions}")
-    print(f"  Duration:   {args.duration}s per run")
-    print(f"  Setup wait: {args.setup_wait}s")
+    port_labels = [f"{s}-{e}" if s != e else str(s) for s, e in ports]
+    print(f"\nExperiment sweep: {len(ports)} range(s) × {len(args.forwarder)} forwarder(s) × {len(directions)} direction(s) = {total} runs")
+    print(f"  Port ranges: {port_labels}")
+    print(f"  Forwarders:  {args.forwarder}")
+    print(f"  Directions:  {directions}")
+    print(f"  Duration:    {args.duration}s per run")
+    print(f"  Setup wait:  {args.setup_wait}s")
     if args.dry_run:
         print("  [DRY RUN — no changes will be made]")
 
     failed = []
     data_warnings = []
-    for idx, (port, forwarder, direction) in enumerate(experiments, 1):
-        label = f"{FORWARDER_LABEL[forwarder]} | {port} Port(s) | Direction: {direction}"
+    for idx, (pstart, pend, forwarder, direction) in enumerate(experiments, 1):
+        port_label = f"{pstart}-{pend}" if pstart != pend else str(pstart)
+        fw_display = (
+            f"XDP({args.route_count}r)"
+            if forwarder == "xdp" and args.route_count is not None
+            else FORWARDER_LABEL[forwarder]
+        )
+        label = f"{fw_display} | Ports {port_label} | Direction: {direction}"
         print(f"\n{'═' * 60}")
         print(f"[{idx}/{total}] {label}")
         print(f"{'═' * 60}")
 
         ansible_ok, data_ok = run_experiment(
-            port_count=port,
+            port_start=pstart,
+            port_end=pend,
             forwarder=forwarder,
             direction=direction,
             ansible_dir=ansible_dir,
@@ -402,8 +619,14 @@ def main() -> None:
             duration=args.duration,
             setup_wait=args.setup_wait,
             dry_run=args.dry_run,
+            route_count=args.route_count,
         )
-        run_name = f"{FORWARDER_LABEL[forwarder]}_{port}_Port_No_Block_{direction}"
+        fw_label = (
+            f"XDP_{args.route_count}r"
+            if forwarder == "xdp" and args.route_count is not None
+            else FORWARDER_LABEL[forwarder]
+        )
+        run_name = f"{fw_label}_{port_label}_Port_No_Block_{direction}"
         if not ansible_ok:
             failed.append(run_name)
         if not data_ok and not args.dry_run:

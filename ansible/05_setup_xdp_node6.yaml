@@ -7,9 +7,10 @@
   gather_facts: false
 
   vars:
-    api_base: "http://localhost:8080/api"
+    api_base: "http://localhost:9898/api"
     iface_ingress: "enp1s0f1np1"
     iface_egress: "enp1s0f0np0"
+    blocked_udp_ports: []
     fwd_entries:
       - ip: "192.168.56.5"
         dst_mac: "64:9D:99:FF:E6:CF"   # Node 5 enp1s0f1np1
@@ -66,6 +67,16 @@
           action: "{{ item.action }}"
         status_code: 201
       loop: "{{ fwd_entries }}"
+
+    - name: Apply blocked UDP ports
+      ansible.builtin.uri:
+        url: "{{ api_base }}/config"
+        method: PUT
+        body_format: json
+        body:
+          udp_ports: "{{ blocked_udp_ports }}"
+        status_code: 200
+      when: blocked_udp_ports | length > 0
 
     - name: Verify forwarding table
       ansible.builtin.uri:
