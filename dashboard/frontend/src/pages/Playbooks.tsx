@@ -19,7 +19,9 @@ export function Playbooks() {
   const [runs, setRuns] = useState<Record<string, RunState>>({}) // keyed by playbookId
   const [activeId, setActiveId] = useState<string | null>(null)
   const [allJobId, setAllJobId] = useState<string | null>(null)
-  const [variant05, setVariant05] = useState<'kernel' | 'xdp'>('kernel')
+  const [allPauseState, setAllPauseState] = useState<string | null>(null)
+  const [allVariant, setAllVariant] = useState<'kernel' | 'xdp' | 'vpp'>('kernel')
+  const [variant04, setVariant04] = useState<'kernel' | 'xdp' | 'vpp'>('kernel')
 
   useEffect(() => {
     api.listPlaybooks().then(setPlaybooks).catch(console.error)
@@ -40,8 +42,9 @@ export function Playbooks() {
 
   const startAll = async () => {
     try {
-      const { job_id } = await api.runAll()
+      const { job_id } = await api.runAll(allVariant)
       setAllJobId(job_id)
+      setAllPauseState(null)
       setActiveId('__all__')
     } catch (e) {
       console.error(e)
@@ -82,21 +85,38 @@ export function Playbooks() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ margin: 0, color: '#222' }}>Playbooks</h2>
-        <button
-          onClick={startAll}
-          style={{
-            padding: '8px 22px',
-            borderRadius: 6,
-            border: 'none',
-            background: '#F6A800',
-            color: '#fff',
-            fontWeight: 700,
-            fontSize: 14,
-            cursor: 'pointer',
-          }}
-        >
-          Run All
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Forwarder:</span>
+            {(['kernel', 'xdp', 'vpp'] as const).map(v => (
+              <label key={v} style={{ cursor: 'pointer', fontSize: 13, color: '#444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input
+                  type="radio"
+                  name="allVariant"
+                  value={v}
+                  checked={allVariant === v}
+                  onChange={() => setAllVariant(v)}
+                />
+                {v === 'kernel' ? 'Kernel' : v === 'xdp' ? 'XDP' : 'VPP'}
+              </label>
+            ))}
+          </div>
+          <button
+            onClick={startAll}
+            style={{
+              padding: '8px 22px',
+              borderRadius: 6,
+              border: 'none',
+              background: '#F6A800',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 14,
+              cursor: 'pointer',
+            }}
+          >
+            Run All
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -107,21 +127,21 @@ export function Playbooks() {
               <PlaybookCard
                 playbook={pb}
                 status={getStatus(pb.id)}
-                onRun={() => startRun(pb.id, pb.id === '05' ? variant05 : undefined)}
+                onRun={() => startRun(pb.id, pb.id === '04' ? variant04 : undefined)}
                 onAbort={() => handleAbort(pb.id)}
               />
-              {pb.id === '05' && !isRunning && (
+              {pb.id === '04' && !isRunning && (
                 <div style={{ display: 'flex', gap: 16, marginTop: 6, paddingLeft: 4 }}>
-                  {(['kernel', 'xdp'] as const).map(v => (
+                  {(['kernel', 'xdp', 'vpp'] as const).map(v => (
                     <label key={v} style={{ cursor: 'pointer', fontSize: 13, color: '#444', display: 'flex', alignItems: 'center', gap: 4 }}>
                       <input
                         type="radio"
-                        name="variant05"
+                        name="variant04"
                         value={v}
-                        checked={variant05 === v}
-                        onChange={() => setVariant05(v)}
+                        checked={variant04 === v}
+                        onChange={() => setVariant04(v)}
                       />
-                      {v === 'kernel' ? 'Kernel' : 'XDP'}
+                      {v === 'kernel' ? 'Kernel' : v === 'xdp' ? 'XDP' : 'VPP'}
                     </label>
                   ))}
                 </div>
@@ -133,7 +153,7 @@ export function Playbooks() {
                     onStateChange={handleStateChange(pb.id)}
                     onDone={handleDone(pb.id)}
                   />
-                  {pb.id === '04' && (
+                  {pb.id === '05' && (
                     <TrafficControl
                       jobId={runs[pb.id].jobId}
                       pauseState={runs[pb.id].pauseState}
@@ -149,7 +169,12 @@ export function Playbooks() {
       {allJobId && activeId === '__all__' && (
         <div style={{ marginTop: 24 }}>
           <h3 style={{ color: '#222', marginBottom: 8 }}>Run All — Output</h3>
-          <LogViewer jobId={allJobId} />
+          <LogViewer
+            jobId={allJobId}
+            onStateChange={(_status, pauseState) => setAllPauseState(pauseState)}
+            onDone={() => setAllPauseState(null)}
+          />
+          <TrafficControl jobId={allJobId} pauseState={allPauseState} />
         </div>
       )}
     </div>

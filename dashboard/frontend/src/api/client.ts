@@ -123,7 +123,7 @@ export const api = {
   listPlaybooks: () => get<PlaybookInfo[]>('/playbooks'),
   runPlaybook: (id: string, variant?: string) =>
     post<{ job_id: string }>(`/playbooks/${id}/run`, variant ? { variant } : undefined),
-  runAll: () => post<{ job_id: string }>('/jobs/run-all'),
+  runAll: (variant?: string) => post<{ job_id: string }>('/jobs/run-all', variant ? { variant } : undefined),
   getJob: (jobId: string) => get<JobStatus>(`/jobs/${jobId}`),
   sendSignal: (jobId: string, signal: 'start_traffic' | 'stop_traffic' | 'abort') =>
     post<{ ok: boolean }>(`/jobs/${jobId}/signal`, { signal }),

@@ -1,0 +1,171 @@
+---
+- name: Rebind NICs to kernel driver before XDP
+  hosts: 10.90.1.6
+  become: true
+
+  vars:
+    pci_devices:
+      - "0000:01:00.0"
+      - "0000:01:00.1"
+
+  tasks:
+    - name: Stop VPP service if running
+      ansible.builtin.shell: systemctl stop vpp
+      failed_when: false
+
+    - name: Bind NICs to kernel driver
+      ansible.builtin.shell: "bash /home/telmat/scripts/bind-to-kernel.sh {{ item }}"
+      loop: "{{ pci_devices }}"
+
+    - name: Set RX/TX ring buffer sizes
+      ansible.builtin.shell: |
+        ethtool -G enp1s0f1np1 rx 8160
+        ethtool -G enp1s0f0np0 tx 8160
+      failed_when: false
+
+    - name: Set queue count to 4 on both NICs
+      ansible.builtin.shell: |
+        ethtool -L enp1s0f1np1 combined 4
+        ethtool -L enp1s0f0np0 combined 4
+      failed_when: false
+
+    - name: Disable adaptive interrupt coalescing
+      ansible.builtin.shell: |
+        ethtool -C enp1s0f1np1 adaptive-rx off adaptive-tx off rx-usecs 50 tx-usecs 50
+        ethtool -C enp1s0f0np0 adaptive-rx off adaptive-tx off rx-usecs 50 tx-usecs 50
+      failed_when: false
+
+    - name: Disable unused offloads on ingress NIC
+      ansible.builtin.shell: ethtool -K enp1s0f1np1 lro off gro off gso off
+      failed_when: false
+
+    - name: Stop irqbalance to prevent IRQ migration
+      ansible.builtin.shell: systemctl stop irqbalance
+      failed_when: false
+
+    - name: Set CPU governor to performance on all cores
+      ansible.builtin.shell: |
+        for cpu in /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor; do
+          echo performance > "$cpu"
+        done
+      failed_when: false
+
+    - name: Pin each ingress NIC queue IRQ to a dedicated CPU (round-robin)
+      ansible.builtin.shell: |
+        i=0
+        for irq in $(grep "enp1s0f1np1" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
+          cpu=$(( i % 4 ))
+          mask=$(printf "%x" $(( 1 << cpu )))
+          echo "$mask" > /proc/irq/$irq/smp_affinity
+          i=$(( i + 1 ))
+        done
+      failed_when: false
+
+    - name: Pin each egress NIC queue IRQ to a dedicated CPU (round-robin)
+      ansible.builtin.shell: |
+        i=0
+        for irq in $(grep "enp1s0f0np0" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
+          cpu=$(( i % 4 ))
+          mask=$(printf "%x" $(( 1 << cpu )))
+          echo "$mask" > /proc/irq/$irq/smp_affinity
+          i=$(( i + 1 ))
+        done
+      failed_when: false
+
+    - name: Configure RSS to hash on src+dst IP and src+dst port
+      ansible.builtin.shell: |
+        ethtool -N enp1s0f1np1 rx-flow-hash udp4 sdfn
+        ethtool -N enp1s0f1np1 rx-flow-hash tcp4 sdfn
+      failed_when: false
+
+
+# Configures the xdp-go-optimized daemon on Node 6 via its REST API.
+# The API runs on localhost:9898 of the control node (same machine).
+- name: Configure XDP forwarder on Node 6 via API
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    api_base: "http://localhost:9898/api"
+    iface_ingress: "enp1s0f1np1"
+    iface_egress: "enp1s0f0np0"
+    blocked_udp_ports: []
+    blocked_tcp_ports: []
+    fwd_entries:
+      - ip: "192.168.56.5"
+        dst_mac: "64:9D:99:FF:E6:CF"   # Node 5 enp1s0f1np1
+        src_mac: "64:9D:99:FF:F5:9A"   # Node 6 enp1s0f0np0
+        action: "redirect"
+      - ip: "192.168.56.1"
+        dst_mac: "64:9D:99:FF:F5:7B"   # Node 1 enp1s0f1np1
+        src_mac: "64:9D:99:FF:F5:9A"   # Node 6 enp1s0f0np0
+        action: "redirect"
+
+  tasks:
+    - name: Stop XDP if already running
+      ansible.builtin.uri:
+        url: "{{ api_base }}/stop"
+        method: POST
+        status_code: [200, 409]
+      ignore_errors: true
+
+    - name: Set ingress and egress interfaces
+      ansible.builtin.uri:
+        url: "{{ api_base }}/system/settings"
+        method: PUT
+        body_format: json
+        body:
+          iface: "{{ iface_ingress }}"
+          redirect_dev: "{{ iface_egress }}"
+        status_code: 200
+
+    - name: Start XDP program
+      ansible.builtin.uri:
+        url: "{{ api_base }}/start"
+        method: POST
+        status_code: 200
+
+    - name: Register egress NIC in devmap (slot 0)
+      ansible.builtin.uri:
+        url: "{{ api_base }}/devmap"
+        method: POST
+        body_format: json
+        body:
+          slot: 0
+          iface: "{{ iface_egress }}"
+        status_code: 200
+
+    - name: Add forwarding table entries
+      ansible.builtin.uri:
+        url: "{{ api_base }}/routes"
+        method: POST
+        body_format: json
+        body:
+          ip: "{{ item.ip }}"
+          dst_mac: "{{ item.dst_mac }}"
+          src_mac: "{{ item.src_mac }}"
+          action: "{{ item.action }}"
+        status_code: 201
+      loop: "{{ fwd_entries }}"
+
+    - name: Clear all blocked TCP/UDP ports
+      ansible.builtin.uri:
+        url: "{{ api_base }}/config"
+        method: PUT
+        body_format: json
+        body:
+          tcp_ports: "{{ blocked_tcp_ports }}"
+          udp_ports: "{{ blocked_udp_ports }}"
+        status_code: 200
+
+    - name: Verify forwarding table
+      ansible.builtin.uri:
+        url: "{{ api_base }}/routes"
+        method: GET
+        status_code: 200
+      register: routes_out
+
+    - name: Print forwarding table
+      ansible.builtin.debug:
+        msg: "{{ routes_out.json }}"

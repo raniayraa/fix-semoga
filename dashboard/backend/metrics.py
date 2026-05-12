@@ -49,8 +49,8 @@ def _compute_deltas(by_time: dict[str, dict[str, int]], metric: str) -> list[int
         prev_val = by_time[times[i - 1]].get(metric, 0)
         curr_val = by_time[times[i]].get(metric, 0)
         deltas.append(max(0, curr_val - prev_val))
-    # Skip first 2 deltas (ramp-up window)
-    return deltas[2:] if len(deltas) > 2 else deltas
+    # Skip first 5 deltas (ramp-up window)
+    return deltas[5:] if len(deltas) > 5 else deltas
 
 
 def _p95(values: list[float]) -> float:

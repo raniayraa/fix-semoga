@@ -17,16 +17,22 @@
   tasks:
     - name: Stop XDP if already running
       ansible.builtin.uri:
-        url: "http://localhost:8080/api/stop"
+        url: "http://localhost:9898/api/stop"
         method: POST
-        status_code: [200, 409]
+        status_code: [200, 409, 500]
       ignore_errors: true
-
-    - name: Unload XDP program if running
-      ansible.builtin.shell: >
-        xdp-loader unload enp1s0f1np1 -a
-      failed_when: false
       delegate_to: localhost
+      become: false
+
+    - name: Stop VPP service if running
+      ansible.builtin.shell: systemctl stop vpp
+      failed_when: false
+
+    - name: Bind NICs to kernel driver
+      ansible.builtin.shell: "bash /home/telmat/scripts/bind-to-kernel.sh {{ item }}"
+      loop:
+        - "0000:01:00.0"
+        - "0000:01:00.1"
 
     - name: Set IP on ingress interface (required for routing + static ARP)
       ansible.builtin.shell: ip addr add 192.168.46.6/24 dev {{ iface_ingress }}

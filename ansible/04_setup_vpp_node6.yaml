@@ -1,0 +1,92 @@
+---
+- name: Configure VPP forwarder on Node 6
+  hosts: 10.90.1.6
+  become: true
+
+  vars:
+    vpp_poll_retries: 30
+    vpp_poll_delay: 1
+    bind_script: /home/telmat/scripts/bind-to-DPDK.sh
+    pci_devices:
+      - "0000:01:00.0"
+      - "0000:01:00.1"
+
+  tasks:
+    - name: Stop XDP forwarder if running before VPP takes over
+      ansible.builtin.uri:
+        url: "http://localhost:9898/api/stop"
+        method: POST
+        status_code: [200, 409, 500]
+      ignore_errors: true
+      delegate_to: localhost
+      become: false
+
+    - name: Stop VPP service if already running
+      ansible.builtin.shell: systemctl stop vpp
+      failed_when: false
+
+    - name: Bind NICs to DPDK (required for VPP)
+      ansible.builtin.shell: "bash {{ bind_script }} {{ item }}"
+      loop: "{{ pci_devices }}"
+
+    - name: Start VPP service
+      ansible.builtin.shell: systemctl start vpp
+
+    - name: Wait for VPP CLI to become ready
+      ansible.builtin.shell: vppctl show int
+      register: vpp_ready
+      until: vpp_ready.rc == 0
+      retries: "{{ vpp_poll_retries }}"
+      delay: "{{ vpp_poll_delay }}"
+
+    - name: Set IP address on port 0 (faces Node 5 / 192.168.56.x)
+      ansible.builtin.shell: >
+        vppctl set int ip address TwentyFiveGigabitEthernet1/0/0 192.168.56.6/24
+      failed_when: false
+
+    - name: Set IP address on port 1 (faces Node 4 / 192.168.46.x)
+      ansible.builtin.shell: >
+        vppctl set int ip address TwentyFiveGigabitEthernet1/0/1 192.168.46.6/24
+      failed_when: false
+
+    - name: Bring up port 0
+      ansible.builtin.shell: vppctl set int state TwentyFiveGigabitEthernet1/0/0 up
+
+    - name: Bring up port 1
+      ansible.builtin.shell: vppctl set int state TwentyFiveGigabitEthernet1/0/1 up
+
+    - name: Set static ARP — Node 5 on port 0
+      ansible.builtin.shell: >
+        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/0
+        192.168.56.5 64:9d:99:ff:e6:cf static
+
+    - name: Set static ARP — Node 1 right-side on port 0
+      ansible.builtin.shell: >
+        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/0
+        192.168.56.1 64:9D:99:FF:F5:7B static
+
+    - name: Set static ARP — Node 4 on port 1
+      ansible.builtin.shell: >
+        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/1
+        192.168.46.4 64:9d:99:ff:e7:af static
+
+    - name: Set static ARP — Node 1 left-side on port 1
+      ansible.builtin.shell: >
+        vppctl set ip neighbor TwentyFiveGigabitEthernet1/0/1
+        192.168.46.1 64:9D:99:FF:F5:7A static
+
+    - name: Show VPP interface state
+      ansible.builtin.shell: vppctl show int
+      register: vpp_int_out
+
+    - name: Print VPP interface state
+      ansible.builtin.debug:
+        msg: "{{ vpp_int_out.stdout_lines }}"
+
+    - name: Show VPP IP neighbors
+      ansible.builtin.shell: vppctl show ip neighbors
+      register: vpp_neigh_out
+
+    - name: Print VPP IP neighbors
+      ansible.builtin.debug:
+        msg: "{{ vpp_neigh_out.stdout_lines }}"

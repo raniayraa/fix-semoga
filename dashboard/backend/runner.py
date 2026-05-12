@@ -17,14 +17,15 @@ PLAYBOOKS = [
     {"id": "01", "filename": "01_basic_setup.yaml",            "description": "Configure network interfaces and IP addresses"},
     {"id": "02", "filename": "02_setup_route.yaml",            "description": "Set up static routing and validate connectivity"},
     {"id": "03", "filename": "03_setup_scripts.yaml",          "description": "Deploy pktgen scripts and bind NICs to DPDK"},
-    {"id": "05", "filename": "05_setup_kernel_node6.yaml",     "description": "Re-assign IPs and static ARP on Node 6 after DPDK binding"},
-    {"id": "04", "filename": "04_start_pktgen.yaml",           "description": "Launch pktgen and control traffic generation"},
+    {"id": "04", "filename": "04_setup_kernel_node6.yaml",     "description": "Set up Node 6 forwarder (XDP / VPP / Kernel)"},
+    {"id": "05", "filename": "05_start_pktgen.yaml",           "description": "Launch pktgen and control traffic generation"},
 ]
 
 VARIANTS = {
-    "05": {
-        "kernel": "05_setup_kernel_node6.yaml",
-        "xdp":    "05_setup_xdp_node6.yaml",
+    "04": {
+        "kernel": "04_setup_kernel_node6.yaml",
+        "xdp":    "04_setup_xdp_node6.yaml",
+        "vpp":    "04_setup_vpp_node6.yaml",
     }
 }
 
@@ -44,6 +45,8 @@ class Job:
     exit_code: Optional[int] = None
     master_fd: int = -1
     pid: int = -1
+    forward_to: Optional[str] = None
+    active_child: Optional['Job'] = None
     _done_event: asyncio.Event = field(default_factory=asyncio.Event)
 
 
@@ -153,7 +156,10 @@ def _safe_read(fd: int) -> bytes:
 
 
 async def _process_line(job: Job, line: str):
-    await manager.broadcast(job.job_id, {"type": "log", "line": line})
+    msg = {"type": "log", "line": line}
+    await manager.broadcast(job.job_id, msg)
+    if job.forward_to:
+        await manager.broadcast(job.forward_to, msg)
 
     old_pause = job.pause_state
     if SIGNAL_START_MARKER in line:
@@ -162,11 +168,10 @@ async def _process_line(job: Job, line: str):
         job.pause_state = "paused_stop"
 
     if job.pause_state != old_pause:
-        await manager.broadcast(job.job_id, {
-            "type": "state",
-            "status": job.status,
-            "pause_state": job.pause_state,
-        })
+        state_msg = {"type": "state", "status": job.status, "pause_state": job.pause_state}
+        await manager.broadcast(job.job_id, state_msg)
+        if job.forward_to:
+            await manager.broadcast(job.forward_to, state_msg)
 
 
 async def inject_enter(job_id: str) -> bool:
@@ -174,6 +179,9 @@ async def inject_enter(job_id: str) -> bool:
     job = get_job(job_id)
     if job is None or job.status != "running":
         return False
+    # Sequence job: delegate to the currently active child
+    if job.active_child is not None:
+        return await inject_enter(job.active_child.job_id)
     if job.pause_state == "paused_start":
         SIGNAL_FILE_START.touch()
         return True
@@ -195,31 +203,31 @@ async def abort_job(job_id: str) -> bool:
         return False
 
 
-async def run_all() -> str:
-    """Run playbooks 00-04 sequentially. Returns a synthetic job_id for the sequence."""
+async def run_all(variant: str | None = None) -> str:
+    """Run playbooks 00-05 sequentially. Returns a synthetic job_id for the sequence."""
     seq_id = str(uuid.uuid4())
+    seq_job = Job(job_id=seq_id, playbook_id="__all__")
+    async with _lock:
+        _registry[seq_id] = seq_job
 
     async def _sequence():
         for pb in PLAYBOOKS:
-            job = await launch_playbook(pb["id"])
-            # forward all messages to the seq_id channel too
-            asyncio.create_task(_forward_job(job, seq_id))
+            pb_variant = variant if pb["id"] == "04" else None
+            job = await launch_playbook(pb["id"], variant=pb_variant)
+            job.forward_to = seq_id
+            seq_job.active_child = job
             await job._done_event.wait()
+            seq_job.active_child = None
             if job.exit_code != 0:
+                seq_job.status = "error"
                 await manager.broadcast(seq_id, {
                     "type": "done",
                     "exit_code": job.exit_code,
                     "status": "error",
                 })
                 return
+        seq_job.status = "done"
         await manager.broadcast(seq_id, {"type": "done", "exit_code": 0, "status": "done"})
 
     asyncio.create_task(_sequence())
     return seq_id
-
-
-async def _forward_job(job: Job, target_id: str):
-    """Subscribe to job's WS messages and re-broadcast to target_id."""
-    # We'll just use a fake WebSocket proxy by directly monitoring the job
-    # via a small polling loop — simpler than a real WS subscriber here
-    await job._done_event.wait()

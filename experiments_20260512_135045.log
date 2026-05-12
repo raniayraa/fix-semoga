@@ -1,0 +1,25 @@
+
+Experiment sweep: 1 range(s) × 3 forwarder(s) × 3 direction(s) = 9 runs
+  Port ranges: ['1024-1033']
+  Forwarders:  ['xdp', 'vpp', 'kernel']
+  Directions:  ['41', '15', '15_41']
+  Duration:    5s per run
+  Setup wait:  10s
+
+════════════════════════════════════════════════════════════
+[1/9] XDP | Ports 1024-1033 | Direction: 41
+════════════════════════════════════════════════════════════
+
+  [1/5] Modifying pkt files ... OK
+  [2/5] Updating pktgen_config.json ... OK
+  [3/5] Running setup playbooks ...
+    Running 01_basic_setup.yaml ... 
+PLAY [Basic network interface setup] *******************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [10.90.1.6]
+ok: [10.90.1.5]
+ok: [10.90.1.1]
+ok: [10.90.1.4]
+
+TASK [Kill any existing pktgen process] ****************************************

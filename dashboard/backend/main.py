@@ -71,8 +71,8 @@ async def run_playbook(playbook_id: str, opts: RunOptions = Body(default=RunOpti
 
 
 @app.post("/api/jobs/run-all")
-async def run_all():
-    seq_id = await runner.run_all()
+async def run_all(opts: RunOptions = Body(default=RunOptions())):
+    seq_id = await runner.run_all(variant=opts.variant)
     return {"job_id": seq_id}
 
 

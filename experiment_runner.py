@@ -40,9 +40,9 @@ PKT_NODES = ["node1_send.pkt", "node4_send.pkt"]
 FORWARDERS = ["vpp", "xdp", "kernel"]
 
 FORWARDER_PLAYBOOK = {
-    "vpp":    "05_setup_vpp_node6.yaml",
-    "xdp":    "05_setup_xdp_node6.yaml",
-    "kernel": "05_setup_kernel_node6.yaml",
+    "vpp":    "04_setup_vpp_node6.yaml",
+    "xdp":    "04_setup_xdp_node6.yaml",
+    "kernel": "04_setup_kernel_node6.yaml",
 }
 
 FORWARDER_LABEL = {
@@ -442,7 +442,7 @@ def run_experiment(
         else FORWARDER_LABEL[forwarder]
     )
     if dry_run:
-        print(f"    [dry-run] would: launch 04_start_pktgen.yaml, wait {setup_wait}s,")
+        print(f"    [dry-run] would: launch 05_start_pktgen.yaml, wait {setup_wait}s,")
         print(f"              touch start signal, wait {duration}s, touch stop signal,")
         print(f"              wait for ansible, rename result dir to "
               f"{fw_label}_{port_label}_Port_No_Block_{direction}")
@@ -457,7 +457,7 @@ def run_experiment(
     SIGNAL_STOP.unlink(missing_ok=True)
 
     cmd = ["ansible-playbook", "-i", inventory,
-           str(ansible_dir / "04_start_pktgen.yaml")]
+           str(ansible_dir / "05_start_pktgen.yaml")]
     proc = subprocess.Popen(cmd)
 
     # Wait for pktgen to initialize (playbook sleeps 5s internally)
@@ -476,7 +476,7 @@ def run_experiment(
     print(f"done (exit {proc.returncode})")
 
     if proc.returncode != 0:
-        print("  WARNING: 04_start_pktgen.yaml exited non-zero — results may be incomplete.")
+        print("  WARNING: 05_start_pktgen.yaml exited non-zero — results may be incomplete.")
 
     # Find and rename new result directory
     result_dir = None
@@ -517,8 +517,8 @@ def main() -> None:
         help='Traffic direction(s): "41", "15", "15_41", or comma-separated combination.',
     )
     parser.add_argument(
-        "--duration", type=int, default=15,
-        help="Seconds to run pktgen traffic per experiment (default: 15).",
+        "--duration", type=int, default=5,
+        help="Seconds to run pktgen traffic per experiment (default: 5).",
     )
     parser.add_argument(
         "--setup-wait", type=int, default=10,

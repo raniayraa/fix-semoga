@@ -10,23 +10,5 @@
     "events_enabled": false,
     "security_events_enabled": true
   },
-  "blocked_ports": {
-    "tcp": [
-      1029,
-      1030,
-      1031,
-      1032,
-      1033
-    ],
-    "udp": [
-      53,
-      69,
-      123,
-      137,
-      138,
-      161,
-      162,
-      11211
-    ]
-  }
+  "blocked_ports": {}
 }

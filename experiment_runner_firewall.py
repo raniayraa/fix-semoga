@@ -46,7 +46,7 @@ PKT_NODES = ["node1_send.pkt", "node4_send.pkt"]
 FORWARDERS = ["vpp", "xdp", "kernel"]
 
 FORWARDER_PLAYBOOK = {
-    "vpp":    "05_setup_vpp_node6.yaml",
+    "vpp":    "04_setup_vpp_node6.yaml",
     "xdp":    "04_setup_xdp_node6.yaml",
     "kernel": "04_setup_kernel_node6.yaml",
 }
@@ -74,7 +74,8 @@ SETUP_PLAYBOOKS = [
     "03_setup_scripts.yaml",
 ]
 
-XDP_API_BASE = "http://localhost:9898/api"
+XDP_API_BASE    = "http://localhost:9898/api"
+KERNEL_API_BASE = "http://localhost:8081/api"
 
 # ---------------------------------------------------------------------------
 # Port range parser
@@ -175,17 +176,19 @@ def update_pktgen_config(direction: str, dry_run: bool) -> None:
 # XDP API
 # ---------------------------------------------------------------------------
 
-def xdp_set_blocked_ports(tcp_ports: list[int], udp_ports: list[int], dry_run: bool) -> bool:
-    """Push blocked TCP and/or UDP port lists to the XDP firewall via REST API.
+def set_blocked_ports(api_base: str, label: str,
+                      tcp_ports: list[int], udp_ports: list[int],
+                      dry_run: bool) -> bool:
+    """Push blocked TCP and/or UDP port lists to a forwarder REST API.
 
-    Called AFTER the forwarder playbook restarts XDP (which resets BPF maps),
-    so the block list is applied on the fresh XDP instance.
+    Works for both XDP (localhost:9898) and Kernel (localhost:8081) dashboards
+    since both expose the same PUT /api/config schema.
     Returns True on success.
     """
     if not tcp_ports and not udp_ports:
         return True
 
-    url = f"{XDP_API_BASE}/config"
+    url = f"{api_base}/config"
     payload: dict = {}
     if tcp_ports:
         payload["tcp_ports"] = tcp_ports
@@ -201,9 +204,9 @@ def xdp_set_blocked_ports(tcp_ports: list[int], udp_ports: list[int], dry_run: b
         return True
 
     if tcp_ports:
-        print(f"    Setting blocked TCP ports {tcp_ports} via XDP API ...", end=" ", flush=True)
+        print(f"    Setting blocked TCP ports {tcp_ports} via {label} API ...", end=" ", flush=True)
     if udp_ports:
-        print(f"    Setting blocked UDP ports {udp_ports} via XDP API ...", end=" ", flush=True)
+        print(f"    Setting blocked UDP ports {udp_ports} via {label} API ...", end=" ", flush=True)
     try:
         req = urllib.request.Request(
             url, data=body, method="PUT",
@@ -216,6 +219,14 @@ def xdp_set_blocked_ports(tcp_ports: list[int], udp_ports: list[int], dry_run: b
     except urllib.error.URLError as e:
         print(f"FAILED ({e})")
         return False
+
+
+def xdp_set_blocked_ports(tcp_ports: list[int], udp_ports: list[int], dry_run: bool) -> bool:
+    return set_blocked_ports(XDP_API_BASE, "XDP", tcp_ports, udp_ports, dry_run)
+
+
+def kernel_set_blocked_ports(tcp_ports: list[int], udp_ports: list[int], dry_run: bool) -> bool:
+    return set_blocked_ports(KERNEL_API_BASE, "Kernel", tcp_ports, udp_ports, dry_run)
 
 # ---------------------------------------------------------------------------
 # Ansible runner
@@ -300,7 +311,7 @@ def run_experiment(
     port_label = f"{port_start}-{port_end}" if port_start != port_end else str(port_start)
 
     # --block-half: override block lists with the upper half of this port range.
-    if block_half and forwarder == "xdp":
+    if block_half and forwarder in ("xdp", "kernel"):
         n = port_end - port_start + 1
         half_start = port_start + n // 2
         block_tcp_ports = list(range(half_start, port_end + 1))
@@ -340,14 +351,18 @@ def run_experiment(
         print(f"  ERROR: forwarder setup failed — skipping this experiment.")
         return False, False
 
-    # Apply port blocks via XDP API after forwarder setup resets BPF maps.
-    if forwarder == "xdp":
-        if not xdp_set_blocked_ports(block_tcp_ports, block_udp_ports, dry_run):
-            print("  WARNING: failed to set blocked ports via XDP API — continuing anyway.")
+    # Apply port blocks via forwarder API after playbook resets state.
+    if block_tcp_ports or block_udp_ports:
+        if forwarder == "xdp":
+            if not xdp_set_blocked_ports(block_tcp_ports, block_udp_ports, dry_run):
+                print("  WARNING: failed to set blocked ports via XDP API — continuing anyway.")
+        elif forwarder == "kernel":
+            if not kernel_set_blocked_ports(block_tcp_ports, block_udp_ports, dry_run):
+                print("  WARNING: failed to set blocked ports via Kernel API — continuing anyway.")
 
     print(f"  [{total_steps}/{total_steps}] Running pktgen experiment ...")
 
-    has_block = forwarder == "xdp" and (block_tcp_ports or block_udp_ports)
+    has_block = bool(block_tcp_ports or block_udp_ports)
     block_label = "Block" if has_block else "No_Block"
 
     if dry_run:
@@ -539,7 +554,7 @@ def main() -> None:
     for idx, (pstart, pend, forwarder, direction) in enumerate(experiments, 1):
         port_label = f"{pstart}-{pend}" if pstart != pend else str(pstart)
         label = f"{FORWARDER_LABEL[forwarder]} | Ports {port_label} | Direction: {direction}"
-        if forwarder == "xdp":
+        if forwarder in ("xdp", "kernel"):
             if args.block_half:
                 n = pend - pstart + 1
                 half_start = pstart + n // 2
