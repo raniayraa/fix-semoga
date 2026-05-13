@@ -1,0 +1,40 @@
+stop 0
+set 0 size 64
+set 0 proto udp
+
+enable 0 range
+
+range 0 src mac start 64:9D:99:FF:E7:AF
+range 0 src mac min   64:9D:99:FF:E7:AF
+range 0 src mac max   64:9D:99:FF:E7:AF
+range 0 src mac inc   00:00:00:00:00:00
+
+range 0 dst mac start 64:9d:99:ff:f5:9b
+range 0 dst mac min   64:9d:99:ff:f5:9b
+range 0 dst mac max   64:9d:99:ff:f5:9b
+range 0 dst mac inc   00:00:00:00:00:00
+
+range 0 src ip start 192.168.46.4
+range 0 src ip min   192.168.46.4
+range 0 src ip max   192.168.46.4
+range 0 src ip inc   0.0.0.0
+
+range 0 dst ip start 192.168.56.1
+range 0 dst ip min   192.168.56.1
+range 0 dst ip max   192.168.56.1
+range 0 dst ip inc   0.0.0.0
+
+range 0 src port start 1024
+range 0 src port min   1024
+range 0 src port max   61023
+range 0 src port inc   1
+
+range 0 dst port start 1024
+range 0 dst port min   1024
+range 0 dst port max   61023
+range 0 dst port inc   1
+
+range 0 size start 64
+range 0 size min   64
+range 0 size max   64
+range 0 size inc   0

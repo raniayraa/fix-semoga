@@ -34,26 +34,11 @@
       failed_when: false
       when: inventory_hostname in ["10.90.1.1", "10.90.1.4", "10.90.1.5"]
 
-    - name: Stop XDP forwarder on Node 6 before rebinding NICs
-      ansible.builtin.uri:
-        url: "http://localhost:9898/api/stop"
-        method: POST
-        status_code: [200, 409, 500]
-      ignore_errors: true
-      delegate_to: localhost
-      become: false
-      when: inventory_hostname == "10.90.1.6"
-
-    - name: Stop VPP service on Node 6 if running
-      ansible.builtin.shell: systemctl stop vpp
-      failed_when: false
-      when: inventory_hostname == "10.90.1.6"
-
     - name: Bind NICs to kernel driver
       ansible.builtin.shell: >
         bash /home/telmat/scripts/bind-to-kernel.sh 0000:01:00.1 | grep 01:00.1 &&
         bash /home/telmat/scripts/bind-to-kernel.sh 0000:01:00.0 | grep 01:00.0
-      when: inventory_hostname in ["10.90.1.1", "10.90.1.4", "10.90.1.5", "10.90.1.6"]
+      when: inventory_hostname in ["10.90.1.1", "10.90.1.4", "10.90.1.5"]
 
     - name: Bring up interface, flush addresses, disable RA
       ansible.builtin.shell: |

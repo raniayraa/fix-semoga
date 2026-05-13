@@ -1,0 +1,70 @@
+---
+- name: Unbind NICs from DPDK and restore IPs on Node 6 (only run after setup VPP)
+  hosts: 10.90.1.6
+  become: true
+
+  vars:
+    bind_script: /home/telmat/scripts/bind-to-kernel.sh
+    pci_devices:
+      - "0000:01:00.0"
+      - "0000:01:00.1"
+    iface_ingress: "enp1s0f1np1"
+    iface_egress:  "enp1s0f0np0"
+    static_neighbors:
+      - { ip: "192.168.46.1", mac: "64:9D:99:FF:F5:7A", dev: "enp1s0f1np1" }
+      - { ip: "192.168.46.4", mac: "64:9D:99:FF:E7:AF", dev: "enp1s0f1np1" }
+      - { ip: "192.168.56.1", mac: "64:9D:99:FF:F5:7B", dev: "enp1s0f0np0" }
+      - { ip: "192.168.56.5", mac: "64:9D:99:FF:E6:CF", dev: "enp1s0f0np0" }
+
+  tasks:
+    - name: Stop VPP service
+      ansible.builtin.shell: systemctl stop vpp
+      failed_when: false
+
+    - name: Bind NICs to kernel driver
+      ansible.builtin.shell: "bash {{ bind_script }} {{ item }}"
+      loop: "{{ pci_devices }}"
+
+    - name: Bring up interfaces and flush old addresses
+      ansible.builtin.shell: |
+        ip link set {{ item }} up
+        ip addr flush dev {{ item }}
+        ip -6 addr flush dev {{ item }}
+        sysctl -w net.ipv6.conf.{{ item }}.accept_ra=0
+      loop:
+        - "{{ iface_ingress }}"
+        - "{{ iface_egress }}"
+
+    - name: Assign IPv4 to ingress interface
+      ansible.builtin.shell: ip addr add 192.168.46.6/24 dev {{ iface_ingress }}
+      failed_when: false
+
+    - name: Assign IPv4 to egress interface
+      ansible.builtin.shell: ip addr add 192.168.56.6/24 dev {{ iface_egress }}
+      failed_when: false
+
+    - name: Assign IPv6 to ingress interface
+      ansible.builtin.shell: ip -6 addr add fd00:46::6/64 dev {{ iface_ingress }}
+      failed_when: false
+
+    - name: Assign IPv6 to egress interface
+      ansible.builtin.shell: ip -6 addr add fd00:56::6/64 dev {{ iface_egress }}
+      failed_when: false
+
+    - name: Enable IPv4 forwarding
+      ansible.builtin.shell: sysctl -w net.ipv4.ip_forward=1
+
+    - name: Set static ARP entries
+      ansible.builtin.shell: >
+        ip neigh replace {{ item.ip }} lladdr {{ item.mac }} dev {{ item.dev }} nud permanent
+      loop: "{{ static_neighbors }}"
+
+    - name: Verify IP addresses
+      ansible.builtin.shell: |
+        ip addr show {{ iface_ingress }} | grep inet
+        ip addr show {{ iface_egress }} | grep inet
+      register: addr_out
+
+    - name: Print IP addresses
+      ansible.builtin.debug:
+        msg: "{{ addr_out.stdout_lines }}"

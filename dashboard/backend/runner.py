@@ -13,11 +13,12 @@ ANSIBLE_DIR = Path("/home/telmat/final_t40/ansible")
 INVENTORY = str(ANSIBLE_DIR / "inventory.ini")
 
 PLAYBOOKS = [
-    {"id": "00", "filename": "00_check_node_connection.yaml",  "description": "Check SSH connectivity to all nodes"},
-    {"id": "01", "filename": "01_basic_setup.yaml",            "description": "Configure network interfaces and IP addresses"},
+    {"id": "00",  "filename": "00_check_node_connection.yaml",  "description": "Check SSH connectivity to all nodes"},
+    {"id": "00b", "filename": "00_node6_unbind_dpdk.yaml",       "description": "Unbind NICs from DPDK and restore kernel driver + IPs on Node 6 (only run after setup VPP)"},
+    {"id": "01",  "filename": "01_basic_setup.yaml",             "description": "Configure network interfaces and IP addresses"},
     {"id": "02", "filename": "02_setup_route.yaml",            "description": "Set up static routing and validate connectivity"},
     {"id": "03", "filename": "03_setup_scripts.yaml",          "description": "Deploy pktgen scripts and bind NICs to DPDK"},
-    {"id": "04", "filename": "04_setup_kernel_node6.yaml",     "description": "Set up Node 6 forwarder (XDP / VPP / Kernel)"},
+    {"id": "04", "filename": "04_setup_kernel_node6.yaml",     "description": "Re-assign IPs and static ARP on Node 6 after DPDK binding"},
     {"id": "05", "filename": "05_start_pktgen.yaml",           "description": "Launch pktgen and control traffic generation"},
 ]
 
@@ -45,9 +46,10 @@ class Job:
     exit_code: Optional[int] = None
     master_fd: int = -1
     pid: int = -1
-    forward_to: Optional[str] = None
-    active_child: Optional['Job'] = None
     _done_event: asyncio.Event = field(default_factory=asyncio.Event)
+    extra_channels: list = field(default_factory=list)
+    active_child: Optional[str] = None
+    forward_to: Optional[str] = None
 
 
 _registry: Dict[str, Job] = {}
@@ -140,11 +142,14 @@ async def _read_loop(job: Job, proc):
     job.exit_code = exit_code
     job.status = "done" if exit_code == 0 else "error"
     job.pause_state = None
-    await manager.broadcast(job.job_id, {
+    done_msg = {
         "type": "done",
         "exit_code": exit_code,
         "status": job.status,
-    })
+    }
+    await manager.broadcast(job.job_id, done_msg)
+    for ch in job.extra_channels:
+        await manager.broadcast(ch, {"type": "log", "line": f"--- playbook {job.playbook_id} finished (exit {exit_code}) ---"})
     job._done_event.set()
 
 
@@ -158,8 +163,8 @@ def _safe_read(fd: int) -> bytes:
 async def _process_line(job: Job, line: str):
     msg = {"type": "log", "line": line}
     await manager.broadcast(job.job_id, msg)
-    if job.forward_to:
-        await manager.broadcast(job.forward_to, msg)
+    for ch in job.extra_channels:
+        await manager.broadcast(ch, msg)
 
     old_pause = job.pause_state
     if SIGNAL_START_MARKER in line:
@@ -168,10 +173,14 @@ async def _process_line(job: Job, line: str):
         job.pause_state = "paused_stop"
 
     if job.pause_state != old_pause:
-        state_msg = {"type": "state", "status": job.status, "pause_state": job.pause_state}
+        state_msg = {
+            "type": "state",
+            "status": job.status,
+            "pause_state": job.pause_state,
+        }
         await manager.broadcast(job.job_id, state_msg)
-        if job.forward_to:
-            await manager.broadcast(job.forward_to, state_msg)
+        for ch in job.extra_channels:
+            await manager.broadcast(ch, state_msg)
 
 
 async def inject_enter(job_id: str) -> bool:
@@ -179,9 +188,9 @@ async def inject_enter(job_id: str) -> bool:
     job = get_job(job_id)
     if job is None or job.status != "running":
         return False
-    # Sequence job: delegate to the currently active child
-    if job.active_child is not None:
-        return await inject_enter(job.active_child.job_id)
+    # Sequence job: forward to the active child (e.g. pktgen)
+    if job.active_child:
+        return await inject_enter(job.active_child)
     if job.pause_state == "paused_start":
         SIGNAL_FILE_START.touch()
         return True
@@ -204,7 +213,7 @@ async def abort_job(job_id: str) -> bool:
 
 
 async def run_all(variant: str | None = None) -> str:
-    """Run playbooks 00-05 sequentially. Returns a synthetic job_id for the sequence."""
+    """Run all playbooks sequentially. Returns a synthetic job_id for the sequence."""
     seq_id = str(uuid.uuid4())
     seq_job = Job(job_id=seq_id, playbook_id="__all__")
     async with _lock:
@@ -212,14 +221,23 @@ async def run_all(variant: str | None = None) -> str:
 
     async def _sequence():
         for pb in PLAYBOOKS:
-            pb_variant = variant if pb["id"] == "04" else None
+            pb_variant = variant if pb["id"] in VARIANTS else None
+            await manager.broadcast(seq_id, {"type": "log", "line": f"=== Starting playbook {pb['id']}: {pb['description']} ==="})
             job = await launch_playbook(pb["id"], variant=pb_variant)
+            job.extra_channels.append(seq_id)
             job.forward_to = seq_id
-            seq_job.active_child = job
+            seq_job.active_child = job.job_id
+            await manager.broadcast(seq_id, {
+                "type": "state",
+                "status": "running",
+                "pause_state": None,
+                "active_child": job.job_id,
+            })
             await job._done_event.wait()
             seq_job.active_child = None
             if job.exit_code != 0:
                 seq_job.status = "error"
+                seq_job.exit_code = job.exit_code
                 await manager.broadcast(seq_id, {
                     "type": "done",
                     "exit_code": job.exit_code,
@@ -227,6 +245,7 @@ async def run_all(variant: str | None = None) -> str:
                 })
                 return
         seq_job.status = "done"
+        seq_job.exit_code = 0
         await manager.broadcast(seq_id, {"type": "done", "exit_code": 0, "status": "done"})
 
     asyncio.create_task(_sequence())

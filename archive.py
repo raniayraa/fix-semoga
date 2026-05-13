@@ -25,7 +25,7 @@ SETUP_PLAYBOOKS = [
     "02_setup_route.yaml",
     "03_setup_scripts.yaml",
 ]
-PKTGEN_PLAYBOOK = "05_start_pktgen.yaml"
+PKTGEN_PLAYBOOK = "04_start_pktgen.yaml"
 
 START_SIGNAL = Path("/tmp/ansible_pktgen_start")
 STOP_SIGNAL = Path("/tmp/ansible_pktgen_stop")
@@ -39,13 +39,13 @@ TRAFFIC_VARIANTS = [
 
 MODE_CONFIG = {
     "vpp":    {"prebind": "00_node6_bind_dpdk.yaml",
-               "setup05": "04_setup_vpp_node6.yaml",
+               "setup05": "05_setup_vpp_node6.yaml",
                "prefix":  "VPP"},
     "xdp":    {"prebind": "00_node6_bind_kernel.yaml",
-               "setup05": "04_setup_xdp_node6.yaml",
+               "setup05": "05_setup_xdp_node6.yaml",
                "prefix":  "XDP"},
     "kernel": {"prebind": "00_node6_bind_kernel.yaml",
-               "setup05": "04_setup_kernel_node6.yaml",
+               "setup05": "05_setup_kernel_node6.yaml",
                "prefix":  "Kernel"},
 }
 

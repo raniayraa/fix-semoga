@@ -2,11 +2,11 @@
   "10.90.1.1": {
     "label": "Node 1",
     "pkt_file": "/home/telmat/node1_send.pkt",
-    "enabled": true
+    "enabled": false
   },
   "10.90.1.4": {
     "label": "Node 4",
     "pkt_file": "/home/telmat/node4_send.pkt",
-    "enabled": false
+    "enabled": true
   }
 }

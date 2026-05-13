@@ -12,7 +12,7 @@
   tasks:
     - name: Stop XDP forwarder before rebinding to kernel
       ansible.builtin.uri:
-        url: "http://localhost:9898/api/stop"
+        url: "http://localhost:8080/api/stop"
         method: POST
         status_code: [200, 409, 500]
       ignore_errors: true

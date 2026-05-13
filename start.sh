@@ -25,6 +25,7 @@ echo "Backend PID: $!"
 # Start frontend in background
 echo "Starting frontend..."
 cd ~/final_t40/dashboard/frontend
+npm install
 nohup npm run dev -- --host > /tmp/frontend.log 2>&1 &
 echo "Frontend PID: $!"
 

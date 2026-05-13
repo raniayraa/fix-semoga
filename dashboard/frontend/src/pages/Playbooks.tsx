@@ -20,8 +20,8 @@ export function Playbooks() {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [allJobId, setAllJobId] = useState<string | null>(null)
   const [allPauseState, setAllPauseState] = useState<string | null>(null)
-  const [allVariant, setAllVariant] = useState<'kernel' | 'xdp' | 'vpp'>('kernel')
   const [variant04, setVariant04] = useState<'kernel' | 'xdp' | 'vpp'>('kernel')
+  const [variantAll, setVariantAll] = useState<'kernel' | 'xdp' | 'vpp'>('kernel')
 
   useEffect(() => {
     api.listPlaybooks().then(setPlaybooks).catch(console.error)
@@ -42,9 +42,8 @@ export function Playbooks() {
 
   const startAll = async () => {
     try {
-      const { job_id } = await api.runAll(allVariant)
+      const { job_id } = await api.runAll(variantAll)
       setAllJobId(job_id)
-      setAllPauseState(null)
       setActiveId('__all__')
     } catch (e) {
       console.error(e)
@@ -86,16 +85,15 @@ export function Playbooks() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ margin: 0, color: '#222' }}>Playbooks</h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span style={{ fontSize: 13, color: '#555', fontWeight: 600 }}>Forwarder:</span>
+          <div style={{ display: 'flex', gap: 12 }}>
             {(['kernel', 'xdp', 'vpp'] as const).map(v => (
               <label key={v} style={{ cursor: 'pointer', fontSize: 13, color: '#444', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <input
                   type="radio"
-                  name="allVariant"
+                  name="variantAll"
                   value={v}
-                  checked={allVariant === v}
-                  onChange={() => setAllVariant(v)}
+                  checked={variantAll === v}
+                  onChange={() => setVariantAll(v)}
                 />
                 {v === 'kernel' ? 'Kernel' : v === 'xdp' ? 'XDP' : 'VPP'}
               </label>
@@ -172,9 +170,11 @@ export function Playbooks() {
           <LogViewer
             jobId={allJobId}
             onStateChange={(_status, pauseState) => setAllPauseState(pauseState)}
-            onDone={() => setAllPauseState(null)}
           />
-          <TrafficControl jobId={allJobId} pauseState={allPauseState} />
+          <TrafficControl
+            jobId={allJobId}
+            pauseState={allPauseState}
+          />
         </div>
       )}
     </div>

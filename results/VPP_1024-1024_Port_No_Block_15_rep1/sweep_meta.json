@@ -1,0 +1,10 @@
+{
+  "forwarder": "VPP",
+  "n_ports": 1,
+  "port_start": 1024,
+  "port_end": 1024,
+  "direction": "15",
+  "rep": 1,
+  "duration_s": 15,
+  "timestamp": "2026-05-13T22:33:00+07:00"
+}
