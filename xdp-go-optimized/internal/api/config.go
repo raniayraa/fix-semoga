@@ -13,7 +13,7 @@ type configResponse struct {
 	Flags    maps.FwFlags `json:"flags"`
 	TCPPorts []uint16     `json:"tcp_ports"`
 	UDPPorts []uint16     `json:"udp_ports"`
-	Protos   []uint8      `json:"protos"`
+	Protos   []int        `json:"protos"`
 }
 
 // configRequest is the body for PUT /api/config.
@@ -22,7 +22,7 @@ type configRequest struct {
 	Flags    *maps.FwFlags `json:"flags"`
 	TCPPorts []uint16      `json:"tcp_ports"`
 	UDPPorts []uint16      `json:"udp_ports"`
-	Protos   []uint8       `json:"protos"`
+	Protos   []int         `json:"protos"`
 }
 
 func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
@@ -53,11 +53,16 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	protoInts := make([]int, len(protos))
+	for i, p := range protos {
+		protoInts[i] = int(p)
+	}
+
 	writeJSON(w, http.StatusOK, configResponse{
 		Flags:    flags,
 		TCPPorts: tcpPorts,
 		UDPPorts: udpPorts,
-		Protos:   protos,
+		Protos:   protoInts,
 	})
 }
 
@@ -93,7 +98,11 @@ func (s *Server) handlePutConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.Protos != nil {
-		if err := maps.SetProtos(objs.BlockedProtos, req.Protos); err != nil {
+		protoBytes := make([]uint8, len(req.Protos))
+		for i, p := range req.Protos {
+			protoBytes[i] = uint8(p)
+		}
+		if err := maps.SetProtos(objs.BlockedProtos, protoBytes); err != nil {
 			writeError(w, http.StatusInternalServerError, "write protos: "+err.Error())
 			return
 		}

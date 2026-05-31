@@ -1,0 +1,10 @@
+{
+  "forwarder": "Kernel",
+  "n_ports": 3,
+  "port_start": 1024,
+  "port_end": 1026,
+  "direction": "15_41",
+  "rep": 3,
+  "duration_s": 15,
+  "timestamp": "2026-05-13T20:43:15+07:00"
+}

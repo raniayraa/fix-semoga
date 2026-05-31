@@ -7,6 +7,7 @@
     pci_devices:
       - "0000:01:00.0"
       - "0000:01:00.1"
+    nic_queues: "{{ ansible_processor_vcpus | default(8) }}"
 
   tasks:
     - name: Stop VPP service if running
@@ -23,10 +24,10 @@
         ethtool -G enp1s0f0np0 tx 8160
       failed_when: false
 
-    - name: Set queue count to 4 on both NICs
+    - name: Set queue count to match CPU count on both NICs
       ansible.builtin.shell: |
-        ethtool -L enp1s0f1np1 combined 4
-        ethtool -L enp1s0f0np0 combined 4
+        ethtool -L enp1s0f1np1 combined {{ nic_queues }}
+        ethtool -L enp1s0f0np0 combined {{ nic_queues }}
       failed_when: false
 
     - name: Disable adaptive interrupt coalescing
@@ -52,9 +53,10 @@
 
     - name: Pin each ingress NIC queue IRQ to a dedicated CPU (round-robin)
       ansible.builtin.shell: |
+        n={{ nic_queues }}
         i=0
-        for irq in $(grep "enp1s0f1np1" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
-          cpu=$(( i % 4 ))
+        for irq in $(grep -E "(enp1s0f1np1|$(basename $(readlink /sys/class/net/enp1s0f1np1/device)))" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
+          cpu=$(( i % n ))
           mask=$(printf "%x" $(( 1 << cpu )))
           echo "$mask" > /proc/irq/$irq/smp_affinity
           i=$(( i + 1 ))
@@ -63,9 +65,10 @@
 
     - name: Pin each egress NIC queue IRQ to a dedicated CPU (round-robin)
       ansible.builtin.shell: |
+        n={{ nic_queues }}
         i=0
-        for irq in $(grep "enp1s0f0np0" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
-          cpu=$(( i % 4 ))
+        for irq in $(grep -E "(enp1s0f0np0|$(basename $(readlink /sys/class/net/enp1s0f0np0/device)))" /proc/interrupts | awk -F: '{print $1}' | tr -d ' ' | sort -n); do
+          cpu=$(( i % n ))
           mask=$(printf "%x" $(( 1 << cpu )))
           echo "$mask" > /proc/irq/$irq/smp_affinity
           i=$(( i + 1 ))

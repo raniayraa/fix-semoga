@@ -77,7 +77,8 @@
  *
  * Ubah ke 100 untuk sampling lebih padat, atau 10000 untuk lebih ringan.
  */
-#define SAMPLE_RATE  1000
+#define SAMPLE_RATE             1000
+#define SECURITY_RATE_LIMIT_NS  10000000ULL   /* 10ms → max 100 events/sec/CPU */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * BPF Maps
@@ -177,6 +178,15 @@ struct {
 	__uint(max_entries, 1);
 } sample_counter SEC(".maps");
 
+/* security_emit_ts — per-CPU timestamp of last emitted security event.
+ * Used for time-based rate limiting in emit_event_security(). */
+struct {
+	__uint(type, BPF_MAP_TYPE_PERCPU_ARRAY);
+	__type(key,   __u32);
+	__type(value, __u64);
+	__uint(max_entries, 1);
+} security_emit_ts SEC(".maps");
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * Helpers
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -193,8 +203,19 @@ static __always_inline void emit_event_security(
 	__u16 src_port, __u16 dst_port,
 	__u8 protocol, __u8 action, __u16 pkt_len)
 {
+	__u32 key = 0;
+	__u64 *last_ts = bpf_map_lookup_elem(&security_emit_ts, &key);
+
+	if (!last_ts)
+		return;
+
+	__u64 now = bpf_ktime_get_ns();
+	if (now - *last_ts < SECURITY_RATE_LIMIT_NS)
+		return;
+	*last_ts = now;
+
 	struct packet_event ev = {
-		.timestamp_ns = bpf_ktime_get_ns(),
+		.timestamp_ns = now,
 		.src_ip       = src_ip,
 		.dst_ip       = dst_ip,
 		.src_port     = src_port,

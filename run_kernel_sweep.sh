@@ -72,8 +72,8 @@ LOG_FILE="/tmp/kernel_sweep_${SWEEP_TS}.log"
 SUMMARY_CSV="${RESULTS_DIR}/kernel_sweep_summary_${SWEEP_TS}.csv"
 
 SETUP_PLAYBOOKS=(01_basic_setup.yaml 02_setup_route.yaml 03_setup_scripts.yaml)
-KERNEL_PLAYBOOK="05_setup_kernel_node6.yaml"
-PKTGEN_PLAYBOOK="04_start_pktgen.yaml"
+KERNEL_PLAYBOOK="04_setup_kernel_node6.yaml"
+PKTGEN_PLAYBOOK="05_start_pktgen.yaml"
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 log() {

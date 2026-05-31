@@ -13,6 +13,8 @@
 #   --skip-setup         Skip 01/02/03 setup playbooks (faster on re-runs)
 #   --min-ports N        Start port count from N (resume support) (default: 1)
 #   --max-ports N        End port count at N                      (default: 10)
+#   --step N             Increment between port counts             (default: 1)
+#   --min-rep N          Start repetitions from N (resume support) (default: 1)
 #   --directions D       Comma-separated directions to run, e.g. 15,15_41    (default: 41,15,15_41)
 #
 # Prerequisites: xdpd running on :9898  →  bash start2.sh
@@ -28,7 +30,9 @@ DIRECTIONS=(41 15 15_41)
 DURATION=15
 SETUP_WAIT=10
 REPS=1
+MIN_REP=1
 COOLDOWN=5
+STEP=1
 DRY_RUN=0
 SKIP_SETUP=0
 
@@ -43,12 +47,16 @@ while [[ $# -gt 0 ]]; do
     --setup-wait=*)  SETUP_WAIT="${1#*=}" ;;
     --reps)          shift; REPS="$1" ;;
     --reps=*)        REPS="${1#*=}" ;;
+    --min-rep)       shift; MIN_REP="$1" ;;
+    --min-rep=*)     MIN_REP="${1#*=}" ;;
     --cooldown)      shift; COOLDOWN="$1" ;;
     --cooldown=*)    COOLDOWN="${1#*=}" ;;
     --min-ports)     shift; MIN_PORTS="$1" ;;
     --min-ports=*)   MIN_PORTS="${1#*=}" ;;
     --max-ports)     shift; MAX_PORTS="$1" ;;
     --max-ports=*)   MAX_PORTS="${1#*=}" ;;
+    --step)          shift; STEP="$1" ;;
+    --step=*)        STEP="${1#*=}" ;;
     --directions)    shift; IFS=',' read -ra DIRECTIONS <<< "$1" ;;
     --directions=*)  IFS=',' read -ra DIRECTIONS <<< "${1#*=}" ;;
     *) echo "Unknown option: $1"; exit 1 ;;
@@ -73,8 +81,8 @@ LOG_FILE="/tmp/xdp_sweep_${SWEEP_TS}.log"
 SUMMARY_CSV="${RESULTS_DIR}/xdp_sweep_summary_${SWEEP_TS}.csv"
 
 SETUP_PLAYBOOKS=(01_basic_setup.yaml 02_setup_route.yaml 03_setup_scripts.yaml)
-XDP_PLAYBOOK="05_setup_xdp_node6.yaml"
-PKTGEN_PLAYBOOK="04_start_pktgen.yaml"
+XDP_PLAYBOOK="04_setup_xdp_node6.yaml"
+PKTGEN_PLAYBOOK="05_start_pktgen.yaml"
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 log() {
@@ -305,7 +313,8 @@ PYEOF
 # ═══════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════
-total=$(( (MAX_PORTS - MIN_PORTS + 1) * ${#DIRECTIONS[@]} * REPS ))
+n_port_values=$(( (MAX_PORTS - MIN_PORTS) / STEP + 1 ))
+total=$(( n_port_values * ${#DIRECTIONS[@]} * (REPS - MIN_REP + 1) ))
 
 log "═══════════════════════════════════════════════════════════"
 log " XDP Experiment Sweep"
@@ -314,9 +323,10 @@ log " Directions   : ${DIRECTIONS[*]}"
 log "   41    = Node4 → Node1"
 log "   15    = Node1 → Node5"
 log "   15_41 = Node4 → Node1  AND  Node1 → Node5"
-log " Repetitions  : ${REPS}x per combination"
+log " Repetitions  : rep ${MIN_REP}–${REPS} per combination"
 log " Total runs   : ${total}"
-log " Timing       : ${DURATION}s traffic | ${SETUP_WAIT}s pktgen init | ${COOLDOWN}s cooldown"
+log " Step          : every ${STEP} port(s)
+ Timing       : ${DURATION}s traffic | ${SETUP_WAIT}s pktgen init | ${COOLDOWN}s cooldown"
 [[ $SKIP_SETUP -eq 1 ]] && log " Setup playbooks: SKIPPED (--skip-setup)"
 [[ $DRY_RUN -eq 1 ]]    && log " [DRY RUN — no changes will be made]"
 log " Log file     : ${LOG_FILE}"
@@ -329,13 +339,13 @@ eta_init
 failed=()
 run=0
 
-for n_ports in $(seq "$MIN_PORTS" "$MAX_PORTS"); do
+for n_ports in $(seq "$MIN_PORTS" "$STEP" "$MAX_PORTS"); do
   port_start=$BASE_PORT
   port_end=$(( BASE_PORT + n_ports - 1 ))
   port_label="${port_start}-${port_end}"
 
   for direction in "${DIRECTIONS[@]}"; do
-    for rep in $(seq 1 "$REPS"); do
+    for rep in $(seq "$MIN_REP" "$REPS"); do
       (( run++ )) || true
       run_label="XDP | ports=${n_ports} (${port_label}) | dir=${direction} | rep=${rep}/${REPS}"
       eta=$(eta_str $(( run - 1 )) "$total")

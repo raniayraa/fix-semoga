@@ -1,0 +1,15 @@
+{
+  "forwarder": "XDP_Firewall",
+  "experiment_type": "sweep",
+  "n_ports": 40,
+  "n_blocked": 20,
+  "port_start": 1024,
+  "port_end": 1063,
+  "block_port_start": 1024,
+  "block_port_end": 1043,
+  "protocol": "tcp",
+  "direction": "15",
+  "rep": 1,
+  "duration_s": 15,
+  "timestamp": "2026-05-19T14:06:26+07:00"
+}

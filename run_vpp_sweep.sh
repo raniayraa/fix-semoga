@@ -72,8 +72,8 @@ LOG_FILE="/tmp/vpp_sweep_${SWEEP_TS}.log"
 SUMMARY_CSV="${RESULTS_DIR}/vpp_sweep_summary_${SWEEP_TS}.csv"
 
 SETUP_PLAYBOOKS=(01_basic_setup.yaml 02_setup_route.yaml 03_setup_scripts.yaml)
-VPP_PLAYBOOK="05_setup_vpp_node6.yaml"
-PKTGEN_PLAYBOOK="04_start_pktgen.yaml"
+VPP_PLAYBOOK="04_setup_vpp_node6.yaml"
+PKTGEN_PLAYBOOK="05_start_pktgen.yaml"
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 log() {

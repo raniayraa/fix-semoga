@@ -81,6 +81,7 @@ type XdpProgMapSpecs struct {
 	FwdTable        *ebpf.MapSpec `ebpf:"fwd_table"`
 	PacketEvents    *ebpf.MapSpec `ebpf:"packet_events"`
 	SampleCounter   *ebpf.MapSpec `ebpf:"sample_counter"`
+	SecurityEmitTs  *ebpf.MapSpec `ebpf:"security_emit_ts"`
 	TxPort          *ebpf.MapSpec `ebpf:"tx_port"`
 	XdpStats        *ebpf.MapSpec `ebpf:"xdp_stats"`
 }
@@ -118,6 +119,7 @@ type XdpProgMaps struct {
 	FwdTable        *ebpf.Map `ebpf:"fwd_table"`
 	PacketEvents    *ebpf.Map `ebpf:"packet_events"`
 	SampleCounter   *ebpf.Map `ebpf:"sample_counter"`
+	SecurityEmitTs  *ebpf.Map `ebpf:"security_emit_ts"`
 	TxPort          *ebpf.Map `ebpf:"tx_port"`
 	XdpStats        *ebpf.Map `ebpf:"xdp_stats"`
 }
@@ -131,6 +133,7 @@ func (m *XdpProgMaps) Close() error {
 		m.FwdTable,
 		m.PacketEvents,
 		m.SampleCounter,
+		m.SecurityEmitTs,
 		m.TxPort,
 		m.XdpStats,
 	)

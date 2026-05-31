@@ -35,7 +35,12 @@ func (s *Server) handleLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		q.Protocol = &n
 	}
-	if v := r.URL.Query().Get("range"); v != "" {
+	if v := r.URL.Query().Get("from_ns"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err == nil {
+			q.FromNs = &n
+		}
+	} else if v := r.URL.Query().Get("range"); v != "" {
 		dur := parseTimeRange(v)
 		if dur > 0 {
 			fromNs := time.Now().Add(-dur).UnixNano()

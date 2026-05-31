@@ -75,7 +75,8 @@ fi
 # ── 4. IRQ affinity: satu IRQ per CPU ────────────────────────────────────────
 echo; echo "=== 4. IRQ affinity: NIC IRQs → CPU per queue ==="
 mapfile -t IRQS < <(
-    grep -E "${IFACE}[-: ]" /proc/interrupts \
+    PCI_SLOT=$(basename "$(readlink /sys/class/net/${IFACE}/device)" 2>/dev/null)
+    grep -E "(${IFACE}|${PCI_SLOT})" /proc/interrupts \
         | awk -F: '{print $1}' | tr -d ' ' | sort -n
 )
 if [[ ${#IRQS[@]} -eq 0 ]]; then
@@ -108,7 +109,8 @@ done
 # ── 6. Lakukan hal yang sama untuk redirect dev ───────────────────────────────
 echo; echo "=== 6. IRQ affinity untuk $REDIRECT_DEV ==="
 mapfile -t IRQS2 < <(
-    grep -E "${REDIRECT_DEV}[-: ]" /proc/interrupts \
+    PCI_SLOT2=$(basename "$(readlink /sys/class/net/${REDIRECT_DEV}/device)" 2>/dev/null)
+    grep -E "(${REDIRECT_DEV}|${PCI_SLOT2})" /proc/interrupts \
         | awk -F: '{print $1}' | tr -d ' ' | sort -n
 )
 i=0

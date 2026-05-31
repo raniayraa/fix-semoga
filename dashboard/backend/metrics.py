@@ -53,19 +53,23 @@ def _compute_deltas(by_time: dict[str, dict[str, int]], metric: str) -> list[int
     return deltas[2:] if len(deltas) > 2 else deltas
 
 
-def _p95(values: list[float]) -> float:
-    """Return the 95th percentile using linear interpolation (matches numpy default)."""
-    if not values:
+def _modal_filtered_peak(values: list[float], tolerance: float = 0.20) -> float:
+    """Return max of values within ±tolerance of the modal anchor.
+
+    Zero values are excluded before computing the anchor and the peak.
+    The modal anchor is the center of the most frequently occurring bin,
+    where bin width = 5% of the median of non-zero values.
+    """
+    nonzero = [v for v in values if v > 0]
+    if not nonzero:
         return 0.0
-    sorted_vals = sorted(values)
-    n = len(sorted_vals)
-    idx = 0.95 * (n - 1)
-    lo = int(idx)
-    hi = lo + 1
-    if hi >= n:
-        return float(sorted_vals[-1])
-    frac = idx - lo
-    return sorted_vals[lo] + frac * (sorted_vals[hi] - sorted_vals[lo])
+    anchor = statistics.median(nonzero)
+    bin_size = anchor * 0.05
+    modal_bin = statistics.mode([round(v / bin_size) for v in nonzero])
+    anchor = modal_bin * bin_size
+    lo, hi = anchor * (1 - tolerance), anchor * (1 + tolerance)
+    filtered = [v for v in nonzero if lo <= v <= hi]
+    return float(max(filtered)) if filtered else float(max(nonzero))
 
 
 def _safe_mean(vals: list[float]) -> float:
@@ -133,8 +137,8 @@ def compute_metrics(exp_dir: Path) -> dict:
     gbps_series = [(b + n * 24) * 8 / 1e9 for b, n in zip(rx_byte_deltas, rx_pkt_deltas)]
 
     return {
-        "peak_forwarded_pps": _p95(list(map(float, rx_pkt_deltas))),
-        "peak_forwarded_gbps": _p95(gbps_series),
+        "peak_forwarded_pps": _modal_filtered_peak(list(map(float, rx_pkt_deltas))),
+        "peak_forwarded_gbps": _modal_filtered_peak(gbps_series),
         "sender_injection_pps": _safe_mean(list(map(float, tx_pkt_deltas))),
         "packet_loss_pct": _safe_mean(loss_series),
         "nic_drop_rate_mean": _safe_mean(list(map(float, drop_deltas))),
