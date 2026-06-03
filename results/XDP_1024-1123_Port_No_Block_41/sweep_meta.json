@@ -1,0 +1,10 @@
+{
+  "forwarder": "XDP",
+  "n_ports": 100,
+  "port_start": 1024,
+  "port_end": 1123,
+  "direction": "41",
+  "rep": 1,
+  "duration_s": 15,
+  "timestamp": "2026-05-31T11:37:18+07:00"
+}
