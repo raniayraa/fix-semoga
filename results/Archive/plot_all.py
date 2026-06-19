@@ -168,7 +168,7 @@ def draw_summary_ax(ax, rx_label, points, technology, traffic_label, y_max=37):
 
     ax.set_title(f"{rx_label}\n{technology} - {traffic_label} - Port Scaling",
                  pad=55, fontweight="bold", fontsize=24)
-    ax.set_xlabel("Number of ports")
+    ax.set_xlabel("No. of ports per node used to send/receive traffic")
     ax.set_ylabel("Max stable packet rate (Mpps)")
     _grid(ax)
 

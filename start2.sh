@@ -16,6 +16,10 @@ done
 
 sleep 1
 
+# Reset xdpd traffic log DB
+sudo rm -f /tmp/xdpd.db
+echo "DB reset."
+
 # Start backend
 echo "Starting backend..."
 cd ~/final_t40/dashboard/backend

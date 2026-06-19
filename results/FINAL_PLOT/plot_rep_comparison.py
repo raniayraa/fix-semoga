@@ -118,7 +118,7 @@ def _draw_rep_ax(ax, protocol, variant, rx_label, series_dict, title):
                         color=REP_COLORS[rep_num], zorder=5)
 
     ax.set_title(f"{title}\n{protocol}  –  {rx_label}", fontweight="bold", pad=14)
-    ax.set_xlabel("Number of ports")
+    ax.set_xlabel("No. of ports per node used to send/receive traffic")
     ax.set_ylabel("Max stable RX rate (Mpps)")
     _grid(ax)
 

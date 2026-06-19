@@ -10,5 +10,9 @@
     "events_enabled": false,
     "security_events_enabled": true
   },
-  "blocked_ports": {}
+  "blocked_ports": {
+    "tcp": [
+      1120
+    ]
+  }
 }

@@ -100,7 +100,7 @@ export default function Monitoring() {
     return () => clearInterval(id)
   }, [])
 
-  // Fetch logs when filters change.
+  // Fetch logs when filters change, and auto-refresh every 5s.
   const fetchLogs = useCallback(async () => {
     try {
       const params: Parameters<typeof api.getLogs>[0] = { limit: 500 }
@@ -112,7 +112,11 @@ export default function Monitoring() {
     } catch { /* ignore */ }
   }, [filterAction, filterProto, filterRange])
 
-  useEffect(() => { fetchLogs() }, [fetchLogs])
+  useEffect(() => {
+    fetchLogs()
+    const id = setInterval(fetchLogs, 5000)
+    return () => clearInterval(id)
+  }, [fetchLogs])
 
   // Reset to page 1 whenever filters or page size change.
   useEffect(() => { setPage(1) }, [filterAction, filterProto, filterRange, pageSize, filterQuery])

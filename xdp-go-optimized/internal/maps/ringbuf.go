@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -87,12 +88,16 @@ func ConsumeRingBuf(ctx context.Context, m *ebpf.Map, store *db.Store) error {
 	buf := make([]db.TrafficLog, 0, batchSize)
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
+	log.Printf("ringbuf: consumer started")
 
 	flush := func() {
 		if len(buf) == 0 {
 			return
 		}
-		_ = store.BatchInsert(context.Background(), buf)
+		log.Printf("ringbuf: flushing %d events to DB", len(buf))
+		if err := store.BatchInsert(context.Background(), buf); err != nil {
+			log.Printf("ringbuf: BatchInsert error: %v", err)
+		}
 		buf = buf[:0]
 	}
 

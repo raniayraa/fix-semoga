@@ -136,7 +136,7 @@ def _draw_proto_ax(ax, variant, rx_label, series_dict, title):
                         color=PROTO_STYLES[protocol]["color"], zorder=5)
 
     ax.set_title(f"{title}\n{rx_label}", fontweight="bold", pad=14)
-    ax.set_xlabel("Number of ports")
+    ax.set_xlabel("No. of ports per node used to send/receive traffic")
     ax.set_ylabel("Max stable RX rate (Mpps)")
     _grid(ax)
 
@@ -248,13 +248,13 @@ for variant in VARIANTS:
             )
 
         ax.legend(handles=legend_entries,
-                  loc="upper center", bbox_to_anchor=(0.5, -0.14),
+                  loc="upper left", bbox_to_anchor=(1.02, 1),
                   borderaxespad=0, frameon=True, framealpha=0.95,
                   ncol=1, handlelength=2.5,
                   borderpad=0.9, labelspacing=0.7)
 
         plt.tight_layout(pad=3.0)
-        plt.subplots_adjust(bottom=0.22)
+        plt.subplots_adjust(right=0.72)
 
         slug     = NODE_SLUG.get(rx_label, rx_label.replace(" ", "_"))
         out_name = f"compare_{variant}_{slug}" if variant == "Multi" \

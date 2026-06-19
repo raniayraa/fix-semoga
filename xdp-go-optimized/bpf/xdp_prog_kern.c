@@ -194,9 +194,9 @@ struct {
 /*
  * emit_event_security() — kirim event DROP/TTL_EXCEEDED ke ring buffer.
  *
- * Selalu emit tanpa sampling. Menggunakan BPF_RB_NO_WAKEUP agar wakeup
- * di-batch bersama consumer timer (100ms poll) — eliminasi per-DROP
- * context switch yang terjadi dengan BPF_RB_FORCE_WAKEUP.
+ * Selalu emit tanpa sampling. Menggunakan flag 0 (default wakeup) agar
+ * consumer goroutine di Go segera di-wake up via epoll setiap kali ada
+ * DROP/TTL_EXCEEDED — penting untuk log security events real-time.
  */
 static __always_inline void emit_event_security(
 	__be32 src_ip, __be32 dst_ip,
@@ -224,7 +224,7 @@ static __always_inline void emit_event_security(
 		.action       = action,
 		.pkt_len      = pkt_len,
 	};
-	bpf_ringbuf_output(&packet_events, &ev, sizeof(ev), BPF_RB_NO_WAKEUP);
+	bpf_ringbuf_output(&packet_events, &ev, sizeof(ev), 0);
 }
 
 /*
